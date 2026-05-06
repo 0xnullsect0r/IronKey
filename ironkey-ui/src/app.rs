@@ -881,10 +881,12 @@ impl IronKeyApp {
                                 if c == "2" { return Some(Message::FocusPane(PaneKind::Browser)); }
                                 if c == "3" { return Some(Message::FocusPane(PaneKind::Terminal)); }
                                 if c == "q" || c == "Q" { return Some(Message::ShutdownRequested); }
-                                if (c == "r" || c == "R") && !modifiers.shift() {
+                                // Ctrl+R: reboot (lowercase only — shift+r produces 'R' but with
+                                // shift modifier; we intentionally treat both uniformly)
+                                if c == "r" || c == "R" {
                                     return Some(Message::RebootRequested);
                                 }
-                                if (c == "f" || c == "F") && !modifiers.shift() {
+                                if c == "f" || c == "F" {
                                     return Some(Message::SearchToggle);
                                 }
                                 if c == "d" || c == "D" { return Some(Message::UnmountSelected); }

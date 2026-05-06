@@ -72,6 +72,11 @@ impl DiskStats {
 }
 
 /// Returns true for top-level physical block devices (not partition sub-entries).
+///
+/// Device naming conventions:
+/// - SATA/IDE (`sda`, `hda`): drive has no trailing digit; partition has trailing digit (e.g. `sda1`)
+/// - NVMe (`nvme0n1`): drive ends with `n<digit>`; partitions add `p<digit>` (e.g. `nvme0n1p1`)
+/// - eMMC/MMC (`mmcblk0`): drive ends with a digit; partitions add `p<digit>` (e.g. `mmcblk0p1`)
 fn is_physical_drive(name: &str) -> bool {
     if name.starts_with("loop")
         || name.starts_with("ram")
@@ -82,12 +87,26 @@ fn is_physical_drive(name: &str) -> bool {
     {
         return false;
     }
-    // For nvme: nvme0n1 is a drive; nvme0n1p1 is a partition
-    // For mmcblk: mmcblk0 is a drive; mmcblk0p1 is a partition
-    // For sda/hda: sda is a drive; sda1 is a partition
+
+    // NVMe drives: match `nvme<N>n<M>` — no trailing `p<digit>`
+    if name.starts_with("nvme") {
+        return !name.contains('p') || {
+            // e.g. nvme0n1 contains no 'p'; nvme0n1p1 does
+            let after_p = name.rsplit('p').next().unwrap_or("");
+            after_p.parse::<u32>().is_err()
+        };
+    }
+
+    // eMMC/MMC drives: match `mmcblk<N>` — no trailing `p<digit>`
+    if name.starts_with("mmcblk") {
+        let suffix = name.trim_start_matches("mmcblk");
+        // Partition looks like mmcblk0p1 — suffix ends with p<digits>
+        return !(suffix.contains('p') && suffix.split('p').last()
+            .map_or(false, |s| s.parse::<u32>().is_ok()));
+    }
+
+    // SATA/IDE/USB (`sda`, `hda`, `vda`, …): drive name has no trailing digits
     !name.chars().last().map(|c| c.is_ascii_digit()).unwrap_or(false)
-        || name.starts_with("nvme")
-        || name.starts_with("mmcblk")
 }
 
 /// Format a bytes-per-second rate for display.
