@@ -194,7 +194,6 @@ if [[ "$QEMU" == true ]]; then
     err "qemu-system-x86_64 not found. Install with: sudo apt install qemu-system-x86  (or pacman -S qemu-system-x86)"
 
   ok "ISO: $ISO ($(du -sh "$ISO" | cut -f1))"
-  info "Starting QEMU — close the window or press Ctrl-C to stop."
   echo ""
 
   KVM_FLAG=""
@@ -205,20 +204,47 @@ if [[ "$QEMU" == true ]]; then
     warn "/dev/kvm not readable — QEMU will run without KVM (slow)."
   fi
 
+  # UEFI: use OVMF if available (matches how most real machines boot)
+  BIOS_FLAG=""
+  for OVMF_PATH in \
+      /usr/share/ovmf/OVMF.fd \
+      /usr/share/edk2/x64/OVMF.fd \
+      /usr/share/edk2-ovmf/x64/OVMF_CODE.fd \
+      /usr/share/OVMF/OVMF_CODE.fd; do
+    if [[ -f "$OVMF_PATH" ]]; then
+      BIOS_FLAG="-bios $OVMF_PATH"
+      info "UEFI firmware: $OVMF_PATH"
+      break
+    fi
+  done
+  if [[ -z "$BIOS_FLAG" ]]; then
+    warn "OVMF not found — booting in legacy BIOS mode."
+    warn "Install with: sudo apt install ovmf  (or pacman -S edk2-ovmf)"
+  fi
+
+  info "Starting QEMU — kernel console output will appear here in the terminal."
+  info "Close the QEMU window or press Ctrl-C in this terminal to stop."
+  echo ""
+
   # Run as the real user so the QEMU window appears on their display
   REAL_USER="${SUDO_USER:-$(whoami)}"
   REAL_DISPLAY=$(su -s /bin/sh "$REAL_USER" -c 'echo $DISPLAY' 2>/dev/null || echo ":0")
   REAL_XAUTH=$(su -s /bin/sh "$REAL_USER" -c 'echo $XAUTHORITY' 2>/dev/null || echo "")
 
+  # -serial stdio: kernel console (console=tty0 + serial) output appears here
+  # -vga virtio:   modern virtio GPU for Wayland/DRM
+  # -usb -device usb-tablet: proper pointer so mouse doesn't get grabbed
   env DISPLAY="$REAL_DISPLAY" XAUTHORITY="$REAL_XAUTH" \
     sudo -u "$REAL_USER" \
     qemu-system-x86_64 \
       $KVM_FLAG \
+      $BIOS_FLAG \
       -m 2G \
       -smp 2 \
       -cdrom "$ISO" \
       -boot d \
       -vga virtio \
+      -serial stdio \
       -usb -device usb-tablet
 
   exit 0
