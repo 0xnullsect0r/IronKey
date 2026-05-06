@@ -2,11 +2,13 @@
 # IronKey OS Build Script
 # Builds a minimal bootable USB image containing the IronKey application.
 #
-# Requirements:
-#   - Debian/Ubuntu host with: debootstrap squashfs-tools grub-pc-bin grub-efi-amd64-bin
-#   - Root privileges
-#   - Rust toolchain (rustup + cargo)
-#   - At least 4 GB free disk space in /tmp
+# Requirements (Debian/Ubuntu host):
+#   debootstrap squashfs-tools grub-pc-bin grub-efi-amd64-bin xorriso mtools
+#   Root privileges · Rust toolchain · 4 GB free in /tmp
+#
+# On non-Debian hosts (Arch, CachyOS, Fedora, etc.) the script automatically
+# re-executes itself inside a debian:bookworm Docker container.
+# Docker must be installed: https://docs.docker.com/engine/install/
 #
 # Usage:
 #   sudo bash os/build.sh [output.iso]
@@ -16,6 +18,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 OUTPUT="${1:-ironkey.iso}"
+# Resolve OUTPUT to an absolute path so it's reachable from inside Docker too
+[[ "$OUTPUT" = /* ]] || OUTPUT="$(pwd)/$OUTPUT"
 BUILD_DIR="/tmp/ironkey-build-$$"
 ROOTFS_DIR="${BUILD_DIR}/rootfs"
 ISO_DIR="${BUILD_DIR}/iso"
@@ -25,6 +29,35 @@ CYAN='\033[0;36m'; GREEN='\033[0;32m'; RED='\033[0;31m'; RESET='\033[0m'
 info()  { echo -e "${CYAN}▶ $*${RESET}"; }
 ok()    { echo -e "${GREEN}✔ $*${RESET}"; }
 err()   { echo -e "${RED}✗ $*${RESET}" >&2; exit 1; }
+
+# ── Docker fallback for non-Debian/Ubuntu hosts (e.g. Arch, CachyOS) ─────────
+# debootstrap requires Debian-style architecture scripts and keyrings.
+# If we're not on a Debian-based host, re-exec inside debian:bookworm via Docker.
+_is_debian_based() {
+    grep -qiE 'debian|ubuntu' /etc/os-release 2>/dev/null
+}
+
+if ! _is_debian_based && [[ -z "${IRONKEY_DOCKER_INNER:-}" ]]; then
+    command -v docker >/dev/null || err \
+        "Not a Debian/Ubuntu host and 'docker' was not found.
+  Install Docker: https://docs.docker.com/engine/install/
+  Or run on a Debian/Ubuntu machine."
+
+    info "Non-Debian host — running build inside debian:bookworm container…"
+
+    # Build dependencies to install inside the container
+    BUILD_DEPS="debootstrap squashfs-tools grub-pc-bin grub-efi-amd64-bin xorriso mtools"
+
+    docker run --rm --privileged \
+        -v "${REPO_ROOT}:${REPO_ROOT}" \
+        -e "IRONKEY_DOCKER_INNER=1" \
+        ${IRONKEY_PREBUILT:+-e "IRONKEY_PREBUILT=${IRONKEY_PREBUILT}"} \
+        debian:bookworm \
+        bash -c "apt-get update -qq && \
+                 apt-get install -y --no-install-recommends ${BUILD_DEPS} >/dev/null 2>&1 && \
+                 bash '${SCRIPT_DIR}/build.sh' '${OUTPUT}'"
+    exit $?
+fi
 
 # ── Sanity checks ────────────────────────────────────────────────────────────
 [[ $EUID -eq 0 ]] || err "Must be run as root"
