@@ -101,18 +101,17 @@ debootstrap \
 
 ok "Debootstrap complete"
 
-# ── Step 3: Copy in our files ────────────────────────────────────────────────
-info "Copying rootfs config files…"
+# ── Step 3: Pre-chroot config ────────────────────────────────────────────────
+# Write files that must exist BEFORE the chroot apt-get runs.
+# IMPORTANT: Do NOT copy /etc/zsh/* or any other file that dpkg owns as a
+# conffile here — if the file already exists when the package is installed,
+# dpkg asks an interactive "keep/replace?" question. Since Docker's stdin is
+# closed, that question hits EOF and aborts the build. We copy all custom
+# etc/ files in Step 3b, AFTER apt-get finishes.
 
 install -Dm755 "$IRONKEY_BIN" "$ROOTFS_DIR/usr/bin/ironkey"
 
-cp -r "$SCRIPT_DIR/rootfs/etc/." "$ROOTFS_DIR/etc/"
-chmod 644 "$ROOTFS_DIR/etc/live/boot.conf"
-# zsh config + starship may not exist yet; ignore failures from chmod on missing files
-chmod 644 "$ROOTFS_DIR/etc/zsh/zshrc"               2>/dev/null || true
-chmod 644 "$ROOTFS_DIR/etc/zsh/ironkey-aliases.zsh"  2>/dev/null || true
-chmod 644 "$ROOTFS_DIR/etc/starship.toml"             2>/dev/null || true
-
+# Basic system identity (not owned as conffiles by any package we install).
 echo "ironkey" > "$ROOTFS_DIR/etc/hostname"
 
 # Minimal fstab — live-boot manages root overlayfs; no extra tmpfs entries.
@@ -126,7 +125,8 @@ EOF
 # Temporary resolv.conf for chroot apt-get calls.
 echo "nameserver 1.1.1.1" > "$ROOTFS_DIR/etc/resolv.conf"
 
-# Initramfs-tools config (must exist before update-initramfs runs in Step 3c).
+# Initramfs-tools config — must exist BEFORE apt-get runs because installing
+# packages triggers update-initramfs, which reads these files.
 mkdir -p "$ROOTFS_DIR/etc/initramfs-tools"
 cat > "$ROOTFS_DIR/etc/initramfs-tools/modules" <<'EOF'
 overlay
@@ -142,8 +142,6 @@ grep -q '^COMPRESS=' "$ROOTFS_DIR/etc/initramfs-tools/initramfs.conf" 2>/dev/nul
 grep -q '^MODULES=' "$ROOTFS_DIR/etc/initramfs-tools/initramfs.conf" 2>/dev/null \
     && sed -i 's/^MODULES=.*/MODULES=most/' "$ROOTFS_DIR/etc/initramfs-tools/initramfs.conf" \
     || echo "MODULES=most" >> "$ROOTFS_DIR/etc/initramfs-tools/initramfs.conf"
-
-ok "Config files copied"
 
 # ── Step 3a: Full chroot package configuration ───────────────────────────────
 # debootstrap's second stage runs post-install scripts under a policy-rc.d that
@@ -175,12 +173,29 @@ chroot "$ROOTFS_DIR" env DEBIAN_FRONTEND=noninteractive dpkg --configure -a
 # Install the remaining packages now that the chroot is fully functional.
 # cage: Wayland kiosk compositor (has many Wayland/DRM/libinput dependencies)
 # zsh + dbus-user-session + firmware-realtek: user shell, D-Bus session, NIC fw
+#
+# --force-confold: if a package conffile already exists on disk (from a prior
+#   build or from another package), keep the installed version without prompting.
+#   Prevents "end of file on stdin at conffile prompt" aborts in Docker.
 chroot "$ROOTFS_DIR" env DEBIAN_FRONTEND=noninteractive \
     apt-get install -y --no-install-recommends \
+        -o Dpkg::Options::="--force-confold" \
+        -o Dpkg::Options::="--force-confdef" \
         cage \
         zsh \
         dbus-user-session \
         firmware-realtek
+
+# ── Step 3b: Copy custom etc/ files ──────────────────────────────────────────
+# Done AFTER apt-get so our files overwrite package defaults silently (no dpkg
+# conffile tracking involved — we write directly to the filesystem).
+info "Copying rootfs config files…"
+cp -r "$SCRIPT_DIR/rootfs/etc/." "$ROOTFS_DIR/etc/"
+chmod 644 "$ROOTFS_DIR/etc/live/boot.conf"
+chmod 644 "$ROOTFS_DIR/etc/zsh/zshrc"               2>/dev/null || true
+chmod 644 "$ROOTFS_DIR/etc/zsh/ironkey-aliases.zsh"  2>/dev/null || true
+chmod 644 "$ROOTFS_DIR/etc/starship.toml"             2>/dev/null || true
+ok "Config files copied"
 
 # ── Verify the systemd binary is actually present ─────────────────────────────
 # If it's missing the next stage will panic with "can't execute init".
@@ -190,7 +205,7 @@ if [[ ! -f "$ROOTFS_DIR/usr/lib/systemd/systemd" ]]; then
 fi
 ok "systemd binary confirmed: /usr/lib/systemd/systemd"
 
-# ── Step 3b: systemd target + service wiring ─────────────────────────────────
+# ── Step 3c: systemd target + service wiring ─────────────────────────────────
 # Set default target to graphical so cage/IronKey launches on boot.
 mkdir -p "$ROOTFS_DIR/etc/systemd/system/graphical.target.wants"
 ln -sf /etc/systemd/system/ironkey.service \
@@ -202,7 +217,7 @@ ln -sf /usr/lib/systemd/system/graphical.target \
 
 ok "Rootfs configured"
 
-# ── Step 3c: Regenerate initramfs inside chroot ───────────────────────────────
+# ── Step 3d: Regenerate initramfs inside chroot ───────────────────────────────
 # Now that all packages are installed and configured, rebuild the initramfs.
 # The debootstrap-generated initrd was built without /proc+/sys so live-boot
 # hooks were absent — delete it first so we get a guaranteed clean build.
