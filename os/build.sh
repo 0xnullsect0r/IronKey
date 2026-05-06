@@ -130,6 +130,40 @@ EOF
 
 ok "Rootfs configured"
 
+# ── Step 3b: Regenerate initramfs inside chroot ───────────────────────────────
+# CRITICAL: debootstrap runs update-initramfs without /proc and /sys mounted.
+# This produces a degraded initramfs that does NOT include live-boot hooks,
+# which means live-boot's pivot-root never runs → PID 1 dies → kernel panic.
+#
+# We must regenerate the initramfs inside a proper chroot with all mounts.
+info "Regenerating initramfs with live-boot hooks (chroot)…"
+
+# Set up a cleanup trap so mounts are always removed even if we error out
+_chroot_cleanup() {
+    for _mnt in dev/pts dev/shm dev sys proc; do
+        mountpoint -q "$ROOTFS_DIR/$_mnt" 2>/dev/null && \
+            umount -lf "$ROOTFS_DIR/$_mnt" 2>/dev/null || true
+    done
+}
+trap _chroot_cleanup EXIT
+
+mount -t proc  proc    "$ROOTFS_DIR/proc"
+mount -t sysfs sysfs   "$ROOTFS_DIR/sys"
+mount --bind   /dev    "$ROOTFS_DIR/dev"
+mount --bind   /dev/pts "$ROOTFS_DIR/dev/pts"
+mount -t tmpfs tmpfs   "$ROOTFS_DIR/dev/shm"
+
+# Ensure /sbin/init → systemd symlink exists (kernel needs a valid PID 1)
+chroot "$ROOTFS_DIR" ln -sf /lib/systemd/systemd /sbin/init 2>/dev/null || true
+
+# Regenerate initramfs — now /proc and /sys are present so all hooks run
+chroot "$ROOTFS_DIR" update-initramfs -c -k all
+
+_chroot_cleanup
+trap - EXIT
+
+ok "Initramfs regenerated with live-boot hooks"
+
 # ── Step 4: Pack rootfs into squashfs ────────────────────────────────────────
 info "Packing rootfs into squashfs…"
 # live-boot expects the squashfs at /live/filesystem.squashfs on the ISO.
@@ -143,6 +177,9 @@ mksquashfs "$ROOTFS_DIR" "$SQUASHFS" \
     -e "$ROOTFS_DIR/sys" \
     -e "$ROOTFS_DIR/dev"
 ok "squashfs: $(du -sh "$SQUASHFS" | cut -f1)"
+
+# filesystem.module tells live-boot the overlay type so it doesn't have to guess
+echo "squashfs" > "${ISO_DIR}/live/filesystem.module"
 
 # ── Step 5: Copy kernel and initramfs ────────────────────────────────────────
 info "Copying kernel and initramfs…"
