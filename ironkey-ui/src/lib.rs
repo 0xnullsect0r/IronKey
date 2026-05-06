@@ -1,6 +1,7 @@
 //! ironkey-ui — iced 0.14 GUI: three-panel fullscreen application.
 
 pub mod app;
+pub mod io_stats;
 pub mod modals;
 pub mod panels;
 pub mod theme;

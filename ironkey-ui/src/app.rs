@@ -4,15 +4,16 @@ use iced::{
     Element, Length, Subscription, Task,
 };
 use iced::widget::{
-    button, column, container, row, scrollable, text, text_input, Space,
+    button, column, container, row, text, Space,
     PaneGrid,
 };
 use iced::widget::pane_grid::{self, Axis, Content as PaneContent, ResizeEvent};
 use ironkey_browser::listing::FileEntry;
-use ironkey_drives::{DriveInfo, PartitionInfo};
+use ironkey_drives::{DriveInfo, PartitionInfo, SmartData};
 use ironkey_terminal::TerminalState;
 use sysinfo::System;
 
+use crate::io_stats::{DiskStats, format_rate};
 use crate::theme;
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -24,6 +25,16 @@ pub enum PaneKind {
     Drives,
     Browser,
     Terminal,
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Clipboard
+// ──────────────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ClipboardOp {
+    Copy,
+    Cut,
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -51,6 +62,29 @@ pub enum Modal {
         speed_bps: u64,
         eta_secs: Option<u64>,
     },
+    /// Partition info + SMART data
+    Info {
+        part: PartitionInfo,
+        smart: Option<SmartData>,
+    },
+    /// File content viewer
+    FileViewer {
+        path: std::path::PathBuf,
+        content: ironkey_browser::viewer::ViewedContent,
+    },
+    /// File properties
+    Properties {
+        entry: FileEntry,
+    },
+    /// Shutdown confirmation
+    Shutdown,
+    /// Reboot confirmation
+    Reboot,
+    /// New partition table confirmation
+    NewTable {
+        device: String,
+        confirm_text: String,
+    },
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -61,8 +95,12 @@ pub enum Modal {
 pub enum Message {
     // Pane grid
     PaneResized(ResizeEvent),
+    // Focus pane
+    FocusPane(PaneKind),
+    FocusNext,
     // System tick (2-second refresh)
     Tick,
+    Refresh,
     // Drives panel
     DrivesLoaded(Vec<DriveInfo>),
     DriveToggled(usize),
@@ -72,6 +110,9 @@ pub enum Message {
     FormatSelected,
     CloneSelected,
     WipeSelected,
+    InfoSelected,
+    NewTableSelected,
+    SmartLoaded(String, Option<SmartData>),
     // Modal
     ModalConfirmTextChanged(String),
     ModalPassphraseChanged(String),
@@ -83,6 +124,21 @@ pub enum Message {
     FilesLoaded(Vec<FileEntry>),
     FileSelected(usize),
     FileActivated(usize),
+    // File operations
+    FileCopySelected,
+    FileCutSelected,
+    FilePasteSelected,
+    FileDeleteSelected,
+    FileRenameStart,
+    FileRenameInputChanged(String),
+    FileRenameCommit,
+    FileCancelInlineEdit,
+    FileNewFolderStart,
+    FileNewFolderInputChanged(String),
+    FileNewFolderCommit,
+    FilePropertiesSelected,
+    ViewFile(std::path::PathBuf),
+    FileViewerLoaded(std::path::PathBuf, ironkey_browser::viewer::ViewedContent),
     // Terminal panel
     TerminalInputChanged(String),
     TerminalSubmit,
@@ -91,6 +147,9 @@ pub enum Message {
     SearchToggle,
     SearchQueryChanged(String),
     SearchSubmit,
+    // System
+    ShutdownRequested,
+    RebootRequested,
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -114,6 +173,13 @@ pub struct IronKeyApp {
     search_open: bool,
     search_query: String,
 
+    // File operations
+    clipboard: Option<(std::path::PathBuf, ClipboardOp)>,
+    rename_index: Option<usize>,
+    rename_input: String,
+    new_folder_active: bool,
+    new_folder_input: String,
+
     // Terminal panel
     terminal_state: TerminalState,
     terminal_input: String,
@@ -124,6 +190,11 @@ pub struct IronKeyApp {
     cpu_usage: f32,
     ram_used: u64,
     ram_total: u64,
+
+    // Disk I/O
+    disk_read_bps: u64,
+    disk_write_bps: u64,
+    prev_diskstats: Option<DiskStats>,
 
     // Modal overlay
     modal: Option<Modal>,
@@ -144,6 +215,13 @@ impl IronKeyApp {
         let ram_used = sys.used_memory();
         let ram_total = sys.total_memory();
 
+        // Try to spawn PTY session (zsh/bash on Linux)
+        let pty_session = ironkey_terminal::PtySession::spawn(
+            ironkey_terminal::pty::PtyOptions::default(),
+        )
+        .map_err(|e| log::warn!("Could not spawn PTY: {}", e))
+        .ok();
+
         let app = Self {
             panes,
             focused_pane: PaneKind::Drives,
@@ -155,17 +233,25 @@ impl IronKeyApp {
             selected_file: None,
             search_open: false,
             search_query: String::new(),
+            clipboard: None,
+            rename_index: None,
+            rename_input: String::new(),
+            new_folder_active: false,
+            new_folder_input: String::new(),
             terminal_state: TerminalState::new(10_000),
             terminal_input: String::new(),
-            pty_session: None,
+            pty_session,
             sys,
             cpu_usage,
             ram_used,
             ram_total,
+            disk_read_bps: 0,
+            disk_write_bps: 0,
+            prev_diskstats: Some(DiskStats::read()),
             modal: None,
         };
 
-        // Load initial drives and files in parallel
+        // Load initial drives
         let drives_task = Task::perform(
             async { ironkey_drives::enumerate_drives().unwrap_or_default() },
             Message::DrivesLoaded,
@@ -182,12 +268,48 @@ impl IronKeyApp {
                 Task::none()
             }
 
+            Message::FocusPane(kind) => {
+                self.focused_pane = kind;
+                Task::none()
+            }
+
+            Message::FocusNext => {
+                self.focused_pane = match self.focused_pane {
+                    PaneKind::Drives => PaneKind::Browser,
+                    PaneKind::Browser => PaneKind::Terminal,
+                    PaneKind::Terminal => PaneKind::Drives,
+                };
+                Task::none()
+            }
+
+            Message::Refresh => {
+                let path = self.current_path.clone();
+                let files_task = Task::perform(
+                    async move { ironkey_browser::listing::list_directory(&path).unwrap_or_default() },
+                    Message::FilesLoaded,
+                );
+                let drives_task = Task::perform(
+                    async { ironkey_drives::enumerate_drives().unwrap_or_default() },
+                    Message::DrivesLoaded,
+                );
+                Task::batch([drives_task, files_task])
+            }
+
             Message::Tick => {
                 self.sys.refresh_cpu_usage();
                 self.sys.refresh_memory();
                 self.cpu_usage = self.sys.global_cpu_usage();
                 self.ram_used = self.sys.used_memory();
                 self.ram_total = self.sys.total_memory();
+
+                // Update disk I/O rate
+                let current = DiskStats::read();
+                if let Some(ref prev) = self.prev_diskstats {
+                    let (rd, wr) = current.rate_since(prev);
+                    self.disk_read_bps = rd;
+                    self.disk_write_bps = wr;
+                }
+                self.prev_diskstats = Some(current);
 
                 // Poll PTY output
                 if let Some(ref mut pty) = self.pty_session {
@@ -228,7 +350,6 @@ impl IronKeyApp {
 
             Message::MountSelected => {
                 if let Some(ref dev) = self.selected_partition.clone() {
-                    // Check if partition is encrypted → show passphrase modal
                     if let Some(part) = self.find_partition(dev) {
                         if part.status == ironkey_drives::PartitionStatus::Encrypted {
                             self.modal = Some(Modal::Passphrase {
@@ -238,7 +359,6 @@ impl IronKeyApp {
                             return Task::none();
                         }
                     }
-                    // Normal mount
                     let device_path = std::path::PathBuf::from(format!("/dev/{}", dev));
                     let _ = ironkey_mount::mount(
                         &device_path,
@@ -272,10 +392,10 @@ impl IronKeyApp {
             }
 
             Message::CloneSelected => {
-                // Placeholder: real impl opens a destination picker
                 self.modal = Some(Modal::Confirm {
                     title: "Clone Partition".to_string(),
-                    message: "Clone functionality: select a destination partition or image file."
+                    message: "Select a destination partition or image file in the terminal, then \
+                              use: dd if=/dev/SOURCE of=/dev/DEST bs=4M status=progress"
                         .to_string(),
                 });
                 Task::none()
@@ -286,7 +406,8 @@ impl IronKeyApp {
                     self.modal = Some(Modal::Confirm {
                         title: "⚠ Wipe Partition".to_string(),
                         message: format!(
-                            "Securely wipe /dev/{}? This is IRREVERSIBLE. Type CONFIRM to proceed.",
+                            "Securely wipe /dev/{}? This is IRREVERSIBLE.\n\
+                             All data will be permanently destroyed.",
                             dev
                         ),
                     });
@@ -294,9 +415,57 @@ impl IronKeyApp {
                 Task::none()
             }
 
+            Message::InfoSelected => {
+                if let Some(ref dev) = self.selected_partition.clone() {
+                    if let Some(part) = self.find_partition(dev) {
+                        let part = part.clone();
+                        // SMART is read from the parent drive, not the partition
+                        let drive_name = drive_name_from_partition(dev);
+                        let drive_path =
+                            std::path::PathBuf::from(format!("/dev/{}", drive_name));
+                        self.modal = Some(Modal::Info {
+                            part: part.clone(),
+                            smart: None,
+                        });
+                        let dev = dev.clone();
+                        return Task::perform(
+                            async move {
+                                let smart = ironkey_drives::smart::read_smart(&drive_path)
+                                    .unwrap_or(None);
+                                (dev, smart)
+                            },
+                            |(dev, smart)| Message::SmartLoaded(dev, smart),
+                        );
+                    }
+                }
+                Task::none()
+            }
+
+            Message::SmartLoaded(dev, smart) => {
+                let _ = dev;
+                if let Some(Modal::Info { smart: ref mut modal_smart, .. }) = self.modal {
+                    *modal_smart = smart;
+                }
+                Task::none()
+            }
+
+            Message::NewTableSelected => {
+                if let Some(ref dev) = self.selected_partition.clone() {
+                    // dev might be a partition; get the parent drive
+                    let drive_name = drive_name_from_partition(dev);
+                    self.modal = Some(Modal::NewTable {
+                        device: drive_name,
+                        confirm_text: String::new(),
+                    });
+                }
+                Task::none()
+            }
+
             Message::ModalConfirmTextChanged(s) => {
-                if let Some(Modal::Format { ref mut confirm_text, .. }) = self.modal {
-                    *confirm_text = s;
+                match &mut self.modal {
+                    Some(Modal::Format { ref mut confirm_text, .. }) => *confirm_text = s,
+                    Some(Modal::NewTable { ref mut confirm_text, .. }) => *confirm_text = s,
+                    _ => {}
                 }
                 Task::none()
             }
@@ -321,18 +490,28 @@ impl IronKeyApp {
                         Modal::Format { device, confirm_text, fs_type } => {
                             if confirm_text == "CONFIRM" {
                                 let path = std::path::PathBuf::from(format!("/dev/{}", device));
-                                let opts = ironkey_drives::ops::FormatOpts {
-                                    fs_type,
-                                    label: None,
-                                };
+                                let opts = ironkey_drives::ops::FormatOpts { fs_type, label: None };
                                 if let Err(e) = ironkey_drives::ops::format_partition(&path, &opts) {
                                     log::error!("Format failed: {}", e);
                                 }
                             }
                         }
+                        Modal::NewTable { device, confirm_text } => {
+                            if confirm_text == "CONFIRM" {
+                                log::info!("Would create new GPT on /dev/{}", device);
+                                // parted /dev/<device> mklabel gpt
+                                let status = std::process::Command::new("parted")
+                                    .args(["--script", &format!("/dev/{}", device), "mklabel", "gpt"])
+                                    .status();
+                                match status {
+                                    Ok(s) if s.success() => log::info!("New GPT table created on /dev/{}", device),
+                                    Ok(s) => log::error!("parted failed: {}", s),
+                                    Err(e) => log::error!("parted error: {}", e),
+                                }
+                            }
+                        }
                         Modal::Passphrase { device, passphrase } => {
-                            let device_path =
-                                std::path::PathBuf::from(format!("/dev/{}", device));
+                            let device_path = std::path::PathBuf::from(format!("/dev/{}", device));
                             let _ = ironkey_mount::mount(
                                 &device_path,
                                 ironkey_mount::FsType::Luks,
@@ -341,6 +520,14 @@ impl IronKeyApp {
                                     ..Default::default()
                                 },
                             );
+                        }
+                        Modal::Shutdown => {
+                            log::info!("Shutting down…");
+                            let _ = std::process::Command::new("poweroff").status();
+                        }
+                        Modal::Reboot => {
+                            log::info!("Rebooting…");
+                            let _ = std::process::Command::new("reboot").status();
                         }
                         _ => {}
                     }
@@ -354,6 +541,7 @@ impl IronKeyApp {
             }
 
             Message::NavigateTo(path) => {
+                self.cancel_inline_edits();
                 self.current_path = path.clone();
                 Task::perform(
                     async move {
@@ -371,6 +559,8 @@ impl IronKeyApp {
 
             Message::FileSelected(idx) => {
                 self.selected_file = Some(idx);
+                self.focused_pane = PaneKind::Browser;
+                self.cancel_inline_edits();
                 Task::none()
             }
 
@@ -378,10 +568,193 @@ impl IronKeyApp {
                 if let Some(entry) = self.files.get(idx) {
                     if entry.is_dir() {
                         return self.update(Message::NavigateTo(entry.path.clone()));
+                    } else {
+                        // Open file viewer
+                        return self.update(Message::ViewFile(entry.path.clone()));
                     }
                 }
                 Task::none()
             }
+
+            // ── File operations ────────────────────────────────────────────
+
+            Message::FileCopySelected => {
+                if let Some(idx) = self.selected_file {
+                    if let Some(entry) = self.files.get(idx) {
+                        self.clipboard = Some((entry.path.clone(), ClipboardOp::Copy));
+                    }
+                }
+                Task::none()
+            }
+
+            Message::FileCutSelected => {
+                if let Some(idx) = self.selected_file {
+                    if let Some(entry) = self.files.get(idx) {
+                        self.clipboard = Some((entry.path.clone(), ClipboardOp::Cut));
+                    }
+                }
+                Task::none()
+            }
+
+            Message::FilePasteSelected => {
+                if let Some((src, op)) = self.clipboard.clone() {
+                    let dst = self.current_path.join(
+                        src.file_name().unwrap_or_else(|| std::ffi::OsStr::new("file")),
+                    );
+                    match op {
+                        ClipboardOp::Copy => {
+                            if let Err(e) = ironkey_browser::ops::copy_file(&src, &dst) {
+                                log::error!("Copy failed: {}", e);
+                            }
+                        }
+                        ClipboardOp::Cut => {
+                            if let Err(e) = ironkey_browser::ops::move_file(&src, &dst) {
+                                log::error!("Move failed: {}", e);
+                            }
+                            self.clipboard = None;
+                        }
+                    }
+                    let path = self.current_path.clone();
+                    return Task::perform(
+                        async move { ironkey_browser::listing::list_directory(&path).unwrap_or_default() },
+                        Message::FilesLoaded,
+                    );
+                }
+                Task::none()
+            }
+
+            Message::FileDeleteSelected => {
+                if let Some(idx) = self.selected_file {
+                    if let Some(entry) = self.files.get(idx).cloned() {
+                        match ironkey_browser::ops::delete_file(&entry.path) {
+                            Ok(_) => {
+                                self.selected_file = None;
+                                let path = self.current_path.clone();
+                                return Task::perform(
+                                    async move {
+                                        ironkey_browser::listing::list_directory(&path).unwrap_or_default()
+                                    },
+                                    Message::FilesLoaded,
+                                );
+                            }
+                            Err(e) => log::error!("Delete failed: {}", e),
+                        }
+                    }
+                }
+                Task::none()
+            }
+
+            Message::FileRenameStart => {
+                if let Some(idx) = self.selected_file {
+                    if let Some(entry) = self.files.get(idx) {
+                        self.rename_index = Some(idx);
+                        self.rename_input = entry.name.clone();
+                    }
+                }
+                Task::none()
+            }
+
+            Message::FileRenameInputChanged(s) => {
+                self.rename_input = s;
+                Task::none()
+            }
+
+            Message::FileRenameCommit => {
+                if let Some(idx) = self.rename_index {
+                    let new_name = self.rename_input.trim().to_string();
+                    if !new_name.is_empty() {
+                        if let Some(entry) = self.files.get(idx) {
+                            if let Err(e) = ironkey_browser::ops::rename_file(&entry.path, &new_name) {
+                                log::error!("Rename failed: {}", e);
+                            }
+                        }
+                    }
+                    self.rename_index = None;
+                    self.rename_input.clear();
+                    let path = self.current_path.clone();
+                    return Task::perform(
+                        async move {
+                            ironkey_browser::listing::list_directory(&path).unwrap_or_default()
+                        },
+                        Message::FilesLoaded,
+                    );
+                }
+                Task::none()
+            }
+
+            Message::FileCancelInlineEdit => {
+                self.cancel_inline_edits();
+                Task::none()
+            }
+
+            Message::FileNewFolderStart => {
+                self.new_folder_active = true;
+                self.new_folder_input = String::from("New Folder");
+                Task::none()
+            }
+
+            Message::FileNewFolderInputChanged(s) => {
+                self.new_folder_input = s;
+                Task::none()
+            }
+
+            Message::FileNewFolderCommit => {
+                let name = self.new_folder_input.trim().to_string();
+                if !name.is_empty() {
+                    let dir_path = self.current_path.join(&name);
+                    if let Err(e) = ironkey_browser::ops::create_directory(&dir_path) {
+                        log::error!("New folder failed: {}", e);
+                    }
+                }
+                self.new_folder_active = false;
+                self.new_folder_input.clear();
+                let path = self.current_path.clone();
+                Task::perform(
+                    async move {
+                        ironkey_browser::listing::list_directory(&path).unwrap_or_default()
+                    },
+                    Message::FilesLoaded,
+                )
+            }
+
+            Message::FilePropertiesSelected => {
+                if let Some(idx) = self.selected_file {
+                    if let Some(entry) = self.files.get(idx).cloned() {
+                        self.modal = Some(Modal::Properties { entry });
+                    }
+                }
+                Task::none()
+            }
+
+            Message::ViewFile(path) => {
+                let p = path.clone();
+                Task::perform(
+                    async move {
+                        match ironkey_browser::viewer::view_file(&p) {
+                            Ok(content) => (path, content),
+                            Err(_) => (
+                                path.clone(),
+                                ironkey_browser::viewer::ViewedContent {
+                                    mode: ironkey_browser::viewer::ViewMode::Text,
+                                    text: Some("(Could not read file)".to_string()),
+                                    hex_lines: Vec::new(),
+                                    file_size: 0,
+                                    bytes_read: 0,
+                                    truncated: false,
+                                },
+                            ),
+                        }
+                    },
+                    |(path, content)| Message::FileViewerLoaded(path, content),
+                )
+            }
+
+            Message::FileViewerLoaded(path, content) => {
+                self.modal = Some(Modal::FileViewer { path, content });
+                Task::none()
+            }
+
+            // ── Terminal ───────────────────────────────────────────────────
 
             Message::TerminalInputChanged(s) => {
                 self.terminal_input = s;
@@ -391,12 +764,12 @@ impl IronKeyApp {
             Message::TerminalSubmit => {
                 let input = std::mem::take(&mut self.terminal_input);
                 if !input.is_empty() {
-                    let line = format!("$ {}\n", input);
-                    self.terminal_state.feed(line.as_bytes());
-
-                    // Send to PTY
                     if let Some(ref mut pty) = self.pty_session {
                         let _ = pty.write_input(format!("{}\n", input).as_bytes());
+                    } else {
+                        // No PTY: echo to display
+                        let line = format!("$ {}\n", input);
+                        self.terminal_state.feed(line.as_bytes());
                     }
                 }
                 Task::none()
@@ -407,9 +780,12 @@ impl IronKeyApp {
                 Task::none()
             }
 
+            // ── Search ─────────────────────────────────────────────────────
+
             Message::SearchToggle => {
                 self.search_open = !self.search_open;
                 self.search_query.clear();
+                self.focused_pane = PaneKind::Browser;
                 Task::none()
             }
 
@@ -419,7 +795,6 @@ impl IronKeyApp {
             }
 
             Message::SearchSubmit => {
-                // Perform a name-based search in the current directory
                 let opts = ironkey_browser::search::SearchOpts {
                     name_glob: Some(self.search_query.clone()),
                     max_depth: Some(3),
@@ -434,7 +809,8 @@ impl IronKeyApp {
                         results
                             .into_iter()
                             .map(|r| ironkey_browser::listing::FileEntry {
-                                name: r.path.file_name()
+                                name: r.path
+                                    .file_name()
                                     .map(|n| n.to_string_lossy().to_string())
                                     .unwrap_or_default(),
                                 path: r.path.clone(),
@@ -450,12 +826,83 @@ impl IronKeyApp {
                     Message::FilesLoaded,
                 )
             }
+
+            // ── System ─────────────────────────────────────────────────────
+
+            Message::ShutdownRequested => {
+                self.modal = Some(Modal::Shutdown);
+                Task::none()
+            }
+
+            Message::RebootRequested => {
+                self.modal = Some(Modal::Reboot);
+                Task::none()
+            }
         }
     }
 
-    /// Subscription: tick every 2 seconds for drive refresh and CPU/RAM stats.
+    /// Subscription: tick every 2 seconds + keyboard events.
     pub fn subscription(&self) -> Subscription<Message> {
-        iced::time::every(std::time::Duration::from_secs(2)).map(|_| Message::Tick)
+        use iced::keyboard::{self, key};
+
+        let tick = iced::time::every(std::time::Duration::from_secs(2))
+            .map(|_| Message::Tick);
+
+        let keys = keyboard::listen().map(|event| {
+            use keyboard::Event;
+            match event {
+                Event::KeyPressed { key, modifiers, .. } => {
+                    use key::Named;
+                    match key.as_ref() {
+                        // Tab cycles panels
+                        keyboard::Key::Named(Named::Tab) => {
+                            if modifiers.shift() {
+                                // Shift+Tab: reverse cycle (same behaviour for 3 panels)
+                                return Some(Message::FocusNext);
+                            }
+                            return Some(Message::FocusNext);
+                        }
+                        // F5 — refresh
+                        keyboard::Key::Named(Named::F5) => return Some(Message::Refresh),
+                        // F2 — rename
+                        keyboard::Key::Named(Named::F2) => return Some(Message::FileRenameStart),
+                        // Delete — delete file
+                        keyboard::Key::Named(Named::Delete) => {
+                            return Some(Message::FileDeleteSelected)
+                        }
+                        // Escape — cancel modal / inline edit
+                        keyboard::Key::Named(Named::Escape) => {
+                            return Some(Message::ModalCancel)
+                        }
+                        // Character shortcuts with modifiers
+                        keyboard::Key::Character(c) => {
+                            if modifiers.control() {
+                                if c == "1" { return Some(Message::FocusPane(PaneKind::Drives)); }
+                                if c == "2" { return Some(Message::FocusPane(PaneKind::Browser)); }
+                                if c == "3" { return Some(Message::FocusPane(PaneKind::Terminal)); }
+                                if c == "q" || c == "Q" { return Some(Message::ShutdownRequested); }
+                                if (c == "r" || c == "R") && !modifiers.shift() {
+                                    return Some(Message::RebootRequested);
+                                }
+                                if (c == "f" || c == "F") && !modifiers.shift() {
+                                    return Some(Message::SearchToggle);
+                                }
+                                if c == "d" || c == "D" { return Some(Message::UnmountSelected); }
+                                if c == "c" || c == "C" { return Some(Message::FileCopySelected); }
+                                if c == "x" || c == "X" { return Some(Message::FileCutSelected); }
+                                if c == "v" || c == "V" { return Some(Message::FilePasteSelected); }
+                            }
+                        }
+                        _ => {}
+                    }
+                    None
+                }
+                _ => None,
+            }
+        })
+        .filter_map(|x| x);
+
+        Subscription::batch([tick, keys])
     }
 
     /// View function: render the full UI.
@@ -498,9 +945,15 @@ impl IronKeyApp {
         let time_str = chrono::Local::now().format("%H:%M:%S").to_string();
         let clock = text(time_str).size(13).color(theme::TEXT_SECONDARY);
 
-        let right = row![cpu, Space::new().width(16), ram, Space::new().width(16), clock]
-            .spacing(0)
-            .align_y(iced::Center);
+        let right = row![
+            cpu,
+            Space::new().width(16),
+            ram,
+            Space::new().width(16),
+            clock,
+        ]
+        .spacing(0)
+        .align_y(iced::Center);
 
         container(
             row![
@@ -560,6 +1013,15 @@ impl IronKeyApp {
 
         let actions = self.view_status_actions();
 
+        // Disk I/O
+        let io_info = text(format!(
+            "↑ {}  ↓ {}",
+            format_rate(self.disk_write_bps),
+            format_rate(self.disk_read_bps),
+        ))
+        .size(11)
+        .color(theme::TEXT_SECONDARY);
+
         container(
             row![
                 text(partition_info)
@@ -567,6 +1029,8 @@ impl IronKeyApp {
                     .color(theme::TEXT_SECONDARY)
                     .width(Length::FillPortion(2)),
                 actions,
+                Space::new().width(Length::Fill),
+                io_info,
             ]
             .spacing(8)
             .align_y(iced::Center)
@@ -579,26 +1043,25 @@ impl IronKeyApp {
 
     fn view_status_actions(&self) -> Element<'_, Message> {
         let has_selection = self.selected_partition.is_some();
-        let is_mounted = self.selected_partition.as_ref().and_then(|d| self.find_partition(d)).map_or(false, |p| {
-            matches!(p.status, ironkey_drives::PartitionStatus::Mounted(_))
-        });
+        let is_mounted = self.selected_partition.as_ref()
+            .and_then(|d| self.find_partition(d))
+            .map_or(false, |p| matches!(p.status, ironkey_drives::PartitionStatus::Mounted(_)));
 
-        fn btn(label: &'static str, msg: Message, enabled: bool) -> iced::Element<'static, Message> {
+        fn btn<'a>(label: &'static str, msg: Message, enabled: bool) -> Element<'a, Message> {
             let b = button(text(label).size(12));
-            if enabled {
-                b.on_press(msg)
-            } else {
-                b
-            }
-            .into()
+            if enabled { b.on_press(msg) } else { b }
+                .padding([3, 8])
+                .into()
         }
 
         row![
-            btn("MOUNT",   Message::MountSelected,   has_selection && !is_mounted),
-            btn("UNMOUNT", Message::UnmountSelected,  has_selection && is_mounted),
-            btn("FORMAT",  Message::FormatSelected,   has_selection),
-            btn("CLONE",   Message::CloneSelected,    has_selection),
-            btn("WIPE",    Message::WipeSelected,     has_selection),
+            btn("MOUNT",     Message::MountSelected,   has_selection && !is_mounted),
+            btn("UNMOUNT",   Message::UnmountSelected,  has_selection && is_mounted),
+            btn("FORMAT",    Message::FormatSelected,   has_selection),
+            btn("CLONE",     Message::CloneSelected,    has_selection),
+            btn("WIPE",      Message::WipeSelected,     has_selection),
+            btn("NEW TABLE", Message::NewTableSelected, has_selection),
+            btn("INFO",      Message::InfoSelected,     has_selection),
         ]
         .spacing(4)
         .into()
@@ -622,6 +1085,30 @@ impl IronKeyApp {
             Modal::Progress { operation, progress, speed_bps, eta_secs } => {
                 crate::widgets::progress_overlay::view(operation, *progress, *speed_bps, *eta_secs)
             }
+            Modal::Info { part, smart } => {
+                crate::modals::info::view(part, smart)
+            }
+            Modal::FileViewer { path, content } => {
+                crate::modals::file_viewer::view(path, content)
+            }
+            Modal::Properties { entry } => {
+                crate::modals::properties::view(entry)
+            }
+            Modal::Shutdown => {
+                crate::modals::confirm::view(
+                    "⏻ Shutdown",
+                    "Power off the system? All unsaved data will be lost.",
+                )
+            }
+            Modal::Reboot => {
+                crate::modals::confirm::view(
+                    "↺ Reboot",
+                    "Reboot the system?",
+                )
+            }
+            Modal::NewTable { device, confirm_text } => {
+                new_table_modal_view(device, confirm_text)
+            }
         }
     }
 
@@ -640,38 +1127,100 @@ impl IronKeyApp {
         }
         None
     }
+
+    /// Cancel any active inline edit (rename / new folder).
+    fn cancel_inline_edits(&mut self) {
+        self.rename_index = None;
+        self.rename_input.clear();
+        self.new_folder_active = false;
+        self.new_folder_input.clear();
+    }
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// New-table modal
+// ──────────────────────────────────────────────────────────────────────────────
+
+fn new_table_modal_view<'a>(device: &'a str, confirm_text: &'a str) -> Element<'a, Message> {
+    use iced::widget::{column, container, row, text, text_input, button, Space};
+    let title = text(format!("NEW PARTITION TABLE: /dev/{}", device))
+        .size(18)
+        .color(theme::ACCENT_DANGER);
+    let warning = text(
+        "⚠ THIS WILL ERASE THE PARTITION TABLE AND ALL DATA ON THIS DISK ⚠\n\
+         A new GPT partition table will be created.\n\
+         Type CONFIRM below to proceed.",
+    )
+    .size(13)
+    .color(theme::ACCENT_WARNING);
+    let input = text_input("Type CONFIRM to proceed…", confirm_text)
+        .on_input(Message::ModalConfirmTextChanged)
+        .on_submit(Message::ModalConfirm)
+        .size(14)
+        .width(Length::Fill);
+    let can = confirm_text == "CONFIRM";
+    let ok = if can {
+        button(text("CREATE GPT TABLE").size(14).color(theme::ACCENT_DANGER))
+            .on_press(Message::ModalConfirm)
+            .padding([8, 16])
+    } else {
+        button(text("CREATE GPT TABLE").size(14).color(theme::TEXT_SECONDARY)).padding([8, 16])
+    };
+    let cancel = button(text("CANCEL").size(14))
+        .on_press(Message::ModalCancel)
+        .padding([8, 16]);
+    let inner = column![
+        title, Space::new().height(12), warning, Space::new().height(12),
+        input, Space::new().height(12),
+        row![cancel, Space::new().width(8), ok],
+    ]
+    .spacing(4).padding(32).width(560);
+    container(inner)
+        .style(|_| iced::widget::container::Style {
+            background: Some(theme::BG_ELEVATED.into()),
+            border: iced::Border { color: theme::ACCENT_DANGER, width: 2.0, radius: 8.0.into() },
+            ..Default::default()
+        })
+        .into()
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 // Expose these fields for panel rendering
+// ──────────────────────────────────────────────────────────────────────────────
+
 impl IronKeyApp {
-    pub fn drives(&self) -> &[DriveInfo] {
-        &self.drives
+    pub fn drives(&self) -> &[DriveInfo] { &self.drives }
+    pub fn expanded_drives(&self) -> &std::collections::HashSet<usize> { &self.expanded_drives }
+    pub fn selected_partition(&self) -> Option<&str> { self.selected_partition.as_deref() }
+    pub fn current_path(&self) -> &std::path::Path { &self.current_path }
+    pub fn files(&self) -> &[FileEntry] { &self.files }
+    pub fn selected_file(&self) -> Option<usize> { self.selected_file }
+    pub fn search_open(&self) -> bool { self.search_open }
+    pub fn search_query(&self) -> &str { &self.search_query }
+    pub fn terminal_state(&self) -> &TerminalState { &self.terminal_state }
+    pub fn terminal_input(&self) -> &str { &self.terminal_input }
+    pub fn clipboard(&self) -> Option<&(std::path::PathBuf, ClipboardOp)> { self.clipboard.as_ref() }
+    pub fn rename_index(&self) -> Option<usize> { self.rename_index }
+    pub fn rename_input(&self) -> &str { &self.rename_input }
+    pub fn new_folder_active(&self) -> bool { self.new_folder_active }
+    pub fn new_folder_input(&self) -> &str { &self.new_folder_input }
+    pub fn focused_pane(&self) -> PaneKind { self.focused_pane }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Utility
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// Strip trailing partition digit(s) to get the parent drive name.
+/// e.g. "sda1" → "sda", "nvme0n1p2" → "nvme0n1", "mmcblk0p1" → "mmcblk0"
+fn drive_name_from_partition(dev: &str) -> String {
+    // NVMe / MMC: strip trailing "p<digits>"
+    if dev.contains('p') {
+        let without = dev.trim_end_matches(|c: char| c.is_ascii_digit());
+        if without.ends_with('p') && without.len() > 1 {
+            return without.trim_end_matches('p').to_string();
+        }
     }
-    pub fn expanded_drives(&self) -> &std::collections::HashSet<usize> {
-        &self.expanded_drives
-    }
-    pub fn selected_partition(&self) -> Option<&str> {
-        self.selected_partition.as_deref()
-    }
-    pub fn current_path(&self) -> &std::path::Path {
-        &self.current_path
-    }
-    pub fn files(&self) -> &[FileEntry] {
-        &self.files
-    }
-    pub fn selected_file(&self) -> Option<usize> {
-        self.selected_file
-    }
-    pub fn search_open(&self) -> bool {
-        self.search_open
-    }
-    pub fn search_query(&self) -> &str {
-        &self.search_query
-    }
-    pub fn terminal_state(&self) -> &TerminalState {
-        &self.terminal_state
-    }
-    pub fn terminal_input(&self) -> &str {
-        &self.terminal_input
-    }
+    // SATA/IDE: strip trailing digits
+    dev.trim_end_matches(|c: char| c.is_ascii_digit()).to_string()
 }

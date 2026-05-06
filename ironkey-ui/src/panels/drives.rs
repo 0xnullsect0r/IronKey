@@ -17,12 +17,22 @@ pub fn view(app: &IronKeyApp) -> Element<'_, Message> {
     ];
 
     for (idx, drive) in app.drives().iter().enumerate() {
-        items.push(drive_row(drive, idx, app));
+        let is_expanded = app.expanded_drives().contains(&idx);
 
-        if app.expanded_drives().contains(&idx) {
+        // Drive row
+        items.push(drive_row(drive, idx));
+
+        if is_expanded {
+            // Partition bar
+            let bar = crate::widgets::partition_bar::view(drive);
+            items.push(bar);
+            items.push(Space::new().height(2).into());
+
+            // Partition rows
             for part in &drive.partitions {
                 items.push(partition_row(part, app));
             }
+            items.push(Space::new().height(4).into());
         }
     }
 
@@ -47,22 +57,31 @@ pub fn view(app: &IronKeyApp) -> Element<'_, Message> {
         .into()
 }
 
-fn drive_row<'a>(
-    drive: &'a DriveInfo,
-    idx: usize,
-    _app: &'a IronKeyApp,
-) -> Element<'a, Message> {
+fn drive_row<'a>(drive: &'a DriveInfo, idx: usize) -> Element<'a, Message> {
     let icon = if drive.rotational { "💿" } else { "⚡" };
+    let kind = if drive.removable { "USB" } else if drive.rotational { "HDD" } else { "SSD" };
     let model = drive.model.as_deref().unwrap_or("Unknown");
     let size = format_size(drive.size_bytes);
 
-    let label = format!("{} /dev/{}  {}  ({})", icon, drive.device, model, size);
+    let health_color = match &drive.status {
+        ironkey_drives::DriveStatus::Healthy => theme::ACCENT_SUCCESS,
+        ironkey_drives::DriveStatus::Error(_) => theme::ACCENT_DANGER,
+    };
+
+    let label = format!("{} /dev/{}  [{}]  {}  ({})", icon, drive.device, kind, model, size);
 
     button(
-        text(label).size(13).color(theme::ACCENT_PRIMARY),
+        row![
+            text(label).size(13).color(theme::ACCENT_PRIMARY),
+            Space::new().width(Length::Fill),
+            text("●").size(10).color(health_color),
+        ]
+        .spacing(4)
+        .align_y(iced::Center),
     )
     .on_press(Message::DriveToggled(idx))
-    .padding([2, 6])
+    .width(Length::Fill)
+    .padding([3, 6])
     .into()
 }
 
@@ -94,9 +113,14 @@ fn partition_row<'a>(
         theme::TEXT_PRIMARY
     };
 
+    let mp_str = match &part.status {
+        PartitionStatus::Mounted(p) => format!("  → {}", p.display()),
+        _ => String::new(),
+    };
+
     let line = format!(
-        "  {} ├─ /dev/{}{}  {}  {}",
-        status_icon, part.device, label_suffix, fs, size
+        "  {} ├─ /dev/{}{}  {}  {}{}",
+        status_icon, part.device, label_suffix, fs, size, mp_str
     );
 
     let dev = part.device.clone();
@@ -108,6 +132,7 @@ fn partition_row<'a>(
         .spacing(0),
     )
     .on_press(Message::PartitionSelected(dev))
+    .width(Length::Fill)
     .padding([2, 4])
     .into()
 }

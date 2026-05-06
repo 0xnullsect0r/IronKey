@@ -1,8 +1,11 @@
 //! Modal dialogs.
 
 pub mod confirm;
+pub mod file_viewer;
 pub mod format;
+pub mod info;
 pub mod passphrase;
+pub mod properties;
 
 use iced::{Element, Length};
 use iced::widget::{container, opaque, stack};
