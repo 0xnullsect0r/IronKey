@@ -1,0 +1,15 @@
+[package]
+name = "ironkey-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "ironkey"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+log.workspace = true
+env_logger.workspace = true
+ironkey-ui = { path = "../ironkey-ui" }
