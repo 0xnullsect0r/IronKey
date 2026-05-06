@@ -89,7 +89,7 @@ info "Bootstrapping minimal Debian rootfs (this may take a few minutes)…"
 debootstrap \
     --arch=amd64 \
     --variant=minbase \
-    --include=systemd,dbus,dbus-user-session,cage,zsh,bash,udev,kmod,linux-image-amd64,initramfs-tools,live-boot,live-boot-initramfs-tools,live-config \
+    --include=systemd,dbus,dbus-user-session,cage,zsh,bash,udev,kmod,linux-image-amd64,initramfs-tools,live-boot,live-boot-initramfs-tools,live-config,firmware-realtek \
     bookworm \
     "$ROOTFS_DIR" \
     http://deb.debian.org/debian
