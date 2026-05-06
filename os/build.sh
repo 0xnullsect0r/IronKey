@@ -89,7 +89,7 @@ info "Bootstrapping minimal Debian rootfs (this may take a few minutes)…"
 debootstrap \
     --arch=amd64 \
     --variant=minbase \
-    --include=systemd,dbus,cage,zsh,bash,udev,linux-image-amd64,initramfs-tools \
+    --include=systemd,dbus,cage,zsh,bash,udev,linux-image-amd64,initramfs-tools,live-boot,live-config \
     bookworm \
     "$ROOTFS_DIR" \
     http://deb.debian.org/debian
@@ -107,26 +107,33 @@ cp -r "$SCRIPT_DIR/rootfs/etc/." "$ROOTFS_DIR/etc/"
 chmod 644 "$ROOTFS_DIR/etc/zsh/zshrc"
 chmod 644 "$ROOTFS_DIR/etc/zsh/ironkey-aliases.zsh"
 chmod 644 "$ROOTFS_DIR/etc/starship.toml"
+chmod 644 "$ROOTFS_DIR/etc/live/boot.conf"
 
-# Enable IronKey service
-mkdir -p "$ROOTFS_DIR/etc/systemd/system/multi-user.target.wants"
+# Enable IronKey service under graphical.target
+mkdir -p "$ROOTFS_DIR/etc/systemd/system/graphical.target.wants"
 ln -sf /etc/systemd/system/ironkey.service \
-    "$ROOTFS_DIR/etc/systemd/system/multi-user.target.wants/ironkey.service"
+    "$ROOTFS_DIR/etc/systemd/system/graphical.target.wants/ironkey.service"
+
+# Set default systemd target to graphical (so cage/IronKey starts)
+ln -sf /lib/systemd/system/graphical.target \
+    "$ROOTFS_DIR/etc/systemd/system/default.target"
 
 # Set hostname
 echo "ironkey" > "$ROOTFS_DIR/etc/hostname"
 
-# tmpfs overlay for runtime writes
+# Minimal fstab — live-boot handles the root overlayfs.
+# Explicit tmpfs mounts on /tmp /var /run are intentionally omitted;
+# they race with live-boot's pivot-root and confuse early systemd startup.
 cat > "$ROOTFS_DIR/etc/fstab" <<'EOF'
-tmpfs   /tmp    tmpfs   defaults,size=256m  0 0
-tmpfs   /var    tmpfs   defaults,size=128m  0 0
-tmpfs   /run    tmpfs   defaults,size=64m   0 0
+proc    /proc   proc    defaults    0 0
 EOF
 
 ok "Rootfs configured"
 
 # ── Step 4: Pack rootfs into squashfs ────────────────────────────────────────
 info "Packing rootfs into squashfs…"
+# live-boot expects the squashfs at /live/filesystem.squashfs on the ISO.
+# ISO_DIR maps to the root of the ISO, so this path is correct.
 SQUASHFS="${ISO_DIR}/live/filesystem.squashfs"
 mkdir -p "${ISO_DIR}/live"
 mksquashfs "$ROOTFS_DIR" "$SQUASHFS" \
@@ -158,8 +165,12 @@ cp "$SCRIPT_DIR/grub/grub.cfg" "${ISO_DIR}/boot/grub/grub.cfg"
 
 # ── Step 7: Build hybrid ISO ─────────────────────────────────────────────────
 info "Building bootable hybrid ISO: $OUTPUT…"
+# --modules ensures iso9660 and search_label are embedded in core.img for BIOS boot.
+# grub-efi-amd64-bin provides the EFI image; grub-pc-bin provides the BIOS image.
+# The result is a hybrid ISO that boots from both BIOS (El Torito) and UEFI.
 grub-mkrescue \
     -o "$OUTPUT" \
+    --modules="iso9660 search search_label part_gpt part_msdos" \
     "$ISO_DIR" \
     -- -volid "IRONKEY" 2>&1 | tail -5
 

@@ -11,8 +11,8 @@
 #   --skip-build      Skip the build step and use an existing ISO
 #   --iso    <file>   ISO to flash when --skip-build is used
 #                     (default: latest ironkey-*.iso in CWD)
-#   --yes             Skip the confirmation prompt
-#   --help            Show this help message
+#   --qemu            Boot the built ISO in QEMU instead of flashing to USB
+#                     (requires qemu-system-x86_64 and KVM)
 
 set -euo pipefail
 
@@ -48,12 +48,17 @@ ${BOLD}Options:${RESET}
   --skip-build      Skip the build step and flash an existing ISO
   --iso    <file>   ISO to flash when using --skip-build
                     (default: latest ironkey-*.iso in current directory)
+  --qemu            Boot the built ISO in QEMU instead of flashing to USB
+                    Requires: qemu-system-x86_64 and /dev/kvm access
   --yes             Skip the confirmation prompt
   --help            Show this help message
 
 ${BOLD}Examples:${RESET}
   # Build from source and write to /dev/sdb
   sudo ./write-usb.sh --drive /dev/sdb
+
+  # Test the ISO in QEMU before flashing
+  sudo ./write-usb.sh --qemu
 
   # Skip build, flash an existing ISO
   sudo ./write-usb.sh --drive /dev/sdb --skip-build
@@ -69,6 +74,7 @@ DRIVE=""
 ISO=""
 SKIP_BUILD=false
 YES=false
+QEMU=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -80,6 +86,8 @@ while [[ $# -gt 0 ]]; do
       shift 2 ;;
     --skip-build)
       SKIP_BUILD=true; shift ;;
+    --qemu)
+      QEMU=true; shift ;;
     --yes|-y)
       YES=true; shift ;;
     --help|-h)
@@ -92,14 +100,14 @@ done
 # ── Root check ────────────────────────────────────────────────────────────────
 [[ $EUID -eq 0 ]] || err "Must be run as root.  Try: sudo $0 $*"
 
-# ── Validate --drive ──────────────────────────────────────────────────────────
-[[ -z "$DRIVE" ]] && err "--drive is required.  Use --help for usage."
-[[ -e "$DRIVE" ]] || err "Device not found: $DRIVE"
-[[ -b "$DRIVE" ]] || err "$DRIVE is not a block device."
-
-# Reject partition paths like /dev/sda1
-if [[ "$DRIVE" =~ [0-9]$ ]]; then
-  err "$DRIVE looks like a partition. Supply the whole disk (e.g. ${DRIVE%%[0-9]*})."
+# ── Validate --drive (not required when --qemu is set) ────────────────────────
+if [[ "$QEMU" == false ]]; then
+  [[ -z "$DRIVE" ]] && err "--drive is required (or use --qemu to test in a VM). Use --help for usage."
+  [[ -e "$DRIVE" ]] || err "Device not found: $DRIVE"
+  [[ -b "$DRIVE" ]] || err "$DRIVE is not a block device."
+  if [[ "$DRIVE" =~ [0-9]$ ]]; then
+    err "$DRIVE looks like a partition. Supply the whole disk (e.g. ${DRIVE%%[0-9]*})."
+  fi
 fi
 
 # ── Banner ────────────────────────────────────────────────────────────────────
@@ -174,8 +182,49 @@ else
 fi
 
 # ══════════════════════════════════════════════════════════════════════════════
-# PHASE 2 — FLASH
+# PHASE 2 — QEMU TEST or FLASH
 # ══════════════════════════════════════════════════════════════════════════════
+
+if [[ "$QEMU" == true ]]; then
+  # ── Boot in QEMU ─────────────────────────────────────────────────────────────
+  header "Phase 2/2 — Booting in QEMU"
+  echo ""
+
+  command -v qemu-system-x86_64 >/dev/null || \
+    err "qemu-system-x86_64 not found. Install with: sudo apt install qemu-system-x86  (or pacman -S qemu-system-x86)"
+
+  ok "ISO: $ISO ($(du -sh "$ISO" | cut -f1))"
+  info "Starting QEMU — close the window or press Ctrl-C to stop."
+  echo ""
+
+  KVM_FLAG=""
+  if [[ -r /dev/kvm ]]; then
+    KVM_FLAG="-enable-kvm -cpu host"
+    info "KVM acceleration enabled."
+  else
+    warn "/dev/kvm not readable — QEMU will run without KVM (slow)."
+  fi
+
+  # Run as the real user so the QEMU window appears on their display
+  REAL_USER="${SUDO_USER:-$(whoami)}"
+  REAL_DISPLAY=$(su -s /bin/sh "$REAL_USER" -c 'echo $DISPLAY' 2>/dev/null || echo ":0")
+  REAL_XAUTH=$(su -s /bin/sh "$REAL_USER" -c 'echo $XAUTHORITY' 2>/dev/null || echo "")
+
+  env DISPLAY="$REAL_DISPLAY" XAUTHORITY="$REAL_XAUTH" \
+    sudo -u "$REAL_USER" \
+    qemu-system-x86_64 \
+      $KVM_FLAG \
+      -m 2G \
+      -smp 2 \
+      -cdrom "$ISO" \
+      -boot d \
+      -vga virtio \
+      -usb -device usb-tablet
+
+  exit 0
+fi
+
+# ── FLASH ─────────────────────────────────────────────────────────────────────
 header "Phase 2/2 — Flashing to USB"
 echo ""
 

@@ -1,7 +1,8 @@
 [Unit]
 Description=IronKey Application
-After=systemd-udevd.service
-Wants=systemd-udevd.service
+# Wait for udev to settle (DRM devices, input devices) and networking
+After=systemd-udevd-settle.service multi-user.target
+Wants=systemd-udevd-settle.service
 
 [Service]
 Type=simple
@@ -11,13 +12,21 @@ StandardInput=tty
 StandardOutput=tty
 StandardError=journal
 
-# Launch cage (Wayland kiosk compositor) with the ironkey binary
-ExecStart=/usr/bin/cage -- /usr/bin/ironkey
+# XDG_RUNTIME_DIR is required by Wayland/cage
+Environment=XDG_RUNTIME_DIR=/run/user/0
+Environment=RUST_LOG=info
+
+# Launch cage (Wayland kiosk compositor) with the IronKey binary.
+# --seat=seat0 ensures cage uses the primary seat from udev.
+ExecStart=/usr/bin/cage -s -- /usr/bin/ironkey
 
 # If cage is unavailable, fall back to direct framebuffer launch
 ExecStartPre=-/sbin/modprobe drm
+ExecStartPre=/bin/mkdir -p /run/user/0
+ExecStartPre=/bin/chmod 700 /run/user/0
+
 Restart=on-failure
-RestartSec=2
+RestartSec=3
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=graphical.target
