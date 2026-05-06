@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Architecture — IronKey</title>
+  <meta name="description" content="A deep dive into IronKey's Rust workspace, crate responsibilities, and the OS layer that makes it bootable." />
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body>
+
+  <!-- Nav -->
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="../index.html" class="nav-logo">
+        <span class="logo-dot"></span>
+        ⚿ IronKey
+      </a>
+      <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+      <ul class="nav-links" id="navLinks">
+        <li><a href="../getting-started/">Getting Started</a></li>
+        <li><a href="../install/">Install</a></li>
+        <li><a href="../user-guide/">User Guide</a></li>
+        <li><a href="../tools/">Tools</a></li>
+        <li><a href="../architecture/" class="active">Architecture</a></li>
+        <li><a href="../getting-started/" class="nav-cta">Get Started</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Page Hero -->
+  <section class="page-hero">
+    <div class="container">
+      <h1>Architecture</h1>
+      <p>A deep dive into IronKey's Rust workspace, crate responsibilities, and the OS layer that makes it bootable.</p>
+    </div>
+  </section>
+
+  <!-- Doc Layout -->
+  <div class="container">
+    <div class="doc-layout">
+
+      <!-- TOC Sidebar -->
+      <aside class="toc">
+        <h4>On this page</h4>
+        <ul>
+          <li><a href="#workspace">Workspace Overview</a></li>
+          <li><a href="#crate-app">ironkey-app</a></li>
+          <li><a href="#crate-ui">ironkey-ui</a></li>
+          <li><a href="#crate-drives">ironkey-drives</a></li>
+          <li><a href="#crate-mount">ironkey-mount</a></li>
+          <li><a href="#crate-browser">ironkey-browser</a></li>
+          <li><a href="#crate-terminal">ironkey-terminal</a></li>
+          <li><a href="#crate-xtask">xtask</a></li>
+          <li><a href="#os-layer">OS Layer</a></li>
+        </ul>
+      </aside>
+
+      <!-- Main content -->
+      <article class="doc-content">
+
+        <!-- Workspace Overview -->
+        <section id="workspace">
+          <h2>Workspace Overview</h2>
+          <p>
+            IronKey is a Cargo workspace (<code>resolver = "2"</code>) under a single <code>Cargo.toml</code>.
+            All crates share common dependency versions via <code>[workspace.dependencies]</code>.
+            The workspace compiles with <code>opt-level = 3</code>, LTO, single codegen unit, and
+            <code>strip = true</code> for release builds — producing a compact, fast binary suitable
+            for a read-only USB image.
+          </p>
+
+          <div class="panel-diagram">
+<pre>ironkey (workspace)
+├── ironkey-app          ← binary entry point
+│   └── depends on: ironkey-ui
+├── ironkey-ui           ← iced 0.14 PaneGrid application
+│   ├── depends on: ironkey-drives
+│   ├── depends on: ironkey-mount
+│   ├── depends on: ironkey-browser
+│   └── depends on: ironkey-terminal
+├── ironkey-drives       ← /sys/block/ enumeration + SMART + disk ops
+├── ironkey-mount        ← filesystem detection + mount/unmount
+├── ironkey-browser      ← file listing, ops, search, viewer
+├── ironkey-terminal     ← PTY + VTE ANSI renderer
+└── xtask                ← cargo xtask build helpers</pre>
+          </div>
+        </section>
+
+        <!-- ironkey-app -->
+        <section id="crate-app">
+          <h2><code>ironkey-app</code></h2>
+          <p>
+            Binary crate. <code>src/main.rs</code> initialises <code>env_logger</code> (default level
+            <code>info</code>) and calls <code>ironkey_ui::run()</code>. If the app returns an error it logs
+            it and exits with code 1.
+          </p>
+
+          <div class="code-header">
+            <span>src/main.rs</span>
+            <button class="copy-btn" aria-label="Copy code">Copy</button>
+          </div>
+          <pre><code>fn main() {
+    env_logger::Builder::from_env(
+        env_logger::Env::default().default_filter_or("info"),
+    ).init();
+    log::info!("IronKey v{} starting", env!("CARGO_PKG_VERSION"));
+    if let Err(e) = ironkey_ui::run() {
+        log::error!("Application error: {:?}", e);
+        std::process::exit(1);
+    }
+}</code></pre>
+
+          <p><strong>Dependencies:</strong> <code>anyhow</code>, <code>log</code>, <code>env_logger</code>, <code>ironkey-ui</code></p>
+        </section>
+
+        <!-- ironkey-ui -->
+        <section id="crate-ui">
+          <h2><code>ironkey-ui</code></h2>
+          <p>
+            Library crate. Implements the iced <code>application</code> entry point and owns all
+            application state. The entire IronKey UI is one iced application with a three-pane layout.
+          </p>
+
+          <h3>Key Components</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Component</th><th>Role</th></tr></thead>
+              <tbody>
+                <tr><td><code>IronKeyApp</code></td><td>Top-level application state struct</td></tr>
+                <tr><td><code>Message</code></td><td>Exhaustive enum of all user and system events (drive actions, browser ops, terminal input, modal events, system tick, I/O stats)</td></tr>
+                <tr><td><code>PaneGrid</code></td><td>Three resizable panes identified by <code>PaneKind</code>: <code>Drives</code>, <code>Browser</code>, <code>Terminal</code></td></tr>
+                <tr><td>2-second tick</td><td><code>iced::time::every</code> for drive enumeration refresh and I/O stats polling</td></tr>
+                <tr><td><code>Modal</code></td><td><code>Option&lt;Modal&gt;</code> enum: <code>Format</code>, <code>Passphrase</code>, <code>Confirm</code>, <code>Progress</code>, <code>Info</code>, <code>FileViewer</code>, <code>Properties</code>, <code>Shutdown</code>, <code>Reboot</code>, <code>NewTable</code></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Module Structure</h3>
+          <p>
+            <code>app</code> · <code>panels</code> (drives / browser / terminal) · <code>modals</code>
+            (one file per modal variant) · <code>theme</code> · <code>widgets</code> · <code>io_stats</code>
+          </p>
+
+          <div class="callout callout-info">
+            <strong>Window config:</strong> The window is configured 1280×800 for desktop development builds
+            (<code>fullscreen: false</code>). On hardware the IronKey ISO sets <code>fullscreen: true</code>
+            via a compile-time feature flag.
+          </div>
+
+          <p><strong>Dependencies:</strong> <code>iced 0.14</code> (features: image, tokio), <code>sysinfo</code>, <code>chrono</code>, all other ironkey crates</p>
+        </section>
+
+        <!-- ironkey-drives -->
+        <section id="crate-drives">
+          <h2><code>ironkey-drives</code></h2>
+          <p>Library crate. Three modules handle all drive-related operations.</p>
+
+          <h3>Module: <code>enumerate</code></h3>
+          <p>
+            Parses <code>/sys/block/</code> to build <code>Vec&lt;DriveInfo&gt;</code>. Each
+            <code>DriveInfo</code> contains model, size, removable flag, and
+            <code>Vec&lt;PartitionInfo&gt;</code>. Reads <code>/proc/self/mountinfo</code> to determine
+            <code>PartitionStatus</code> (mounted / unmounted / busy).
+          </p>
+
+          <h3>Module: <code>smart</code></h3>
+          <p>
+            Issues ATA IDENTIFY DEVICE and SMART READ DATA commands via <code>nix::ioctl_readwrite!</code>
+            macros. Returns <code>Option&lt;SmartData&gt;</code> containing: overall health pass/fail,
+            temperature, power-on hours, reallocated sector count, pending sector count, uncorrectable sector
+            count, read error rate.
+          </p>
+
+          <h3>Module: <code>ops</code></h3>
+          <p>Blocking disk operations intended to run inside <code>tokio::task::spawn_blocking</code>:</p>
+          <ul>
+            <li><code>format_partition(opts: FormatOpts)</code> — runs the appropriate <code>mkfs.*</code> binary</li>
+            <li><code>clone_partition(src, dst, tx: Sender&lt;CloneProgress&gt;)</code> — block-level copy with live progress</li>
+            <li><code>wipe_partition(dev, mode: WipeMode)</code> — fills with zeros (Fast) or random data (Secure)</li>
+          </ul>
+
+          <h3>Key Public Types</h3>
+          <p>
+            <code>DriveInfo</code> · <code>PartitionInfo</code> · <code>DriveStatus</code> ·
+            <code>PartitionStatus</code> · <code>SmartData</code> · <code>FormatOpts</code> ·
+            <code>FormatFsType</code> · <code>WipeMode</code> · <code>CloneProgress</code>
+          </p>
+
+          <p><strong>Dependencies:</strong> <code>nix</code> (features: ioctl, fs, mount) — Linux-only</p>
+        </section>
+
+        <!-- ironkey-mount -->
+        <section id="crate-mount">
+          <h2><code>ironkey-mount</code></h2>
+          <p>
+            Library crate. Detects filesystem type by reading magic bytes, then dispatches the appropriate
+            mount strategy.
+          </p>
+
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Module</th><th>Strategy</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><code>detect</code></td>
+                  <td>Reads first 512 bytes, matches magic signatures: LUKS (<code>LUKS\xba\xbe</code>), NTFS (<code>NTFS    </code>), APFS, BitLocker, ext2/3/4, btrfs, XFS, F2FS, vfat</td>
+                </tr>
+                <tr>
+                  <td><code>luks</code></td>
+                  <td>Runs <code>cryptsetup luksOpen &lt;dev&gt; ironkey_&lt;uuid&gt;</code> then mounts the mapper device</td>
+                </tr>
+                <tr>
+                  <td><code>ntfs</code></td>
+                  <td>Tries kernel <code>ntfs3</code> module first, falls back to <code>ntfs-3g</code> FUSE</td>
+                </tr>
+                <tr>
+                  <td><code>apfs</code></td>
+                  <td>Uses <code>apfs-fuse</code> FUSE driver (read-only; write support not available)</td>
+                </tr>
+                <tr>
+                  <td><code>bitlocker</code></td>
+                  <td>Uses <code>dislocker</code> to expose a virtual device, then mounts the inner NTFS</td>
+                </tr>
+                <tr>
+                  <td><code>generic</code></td>
+                  <td>Calls <code>mount(2)</code> via <code>nix</code> with the detected fstype string</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ironkey-browser -->
+        <section id="crate-browser">
+          <h2><code>ironkey-browser</code></h2>
+          <p>Library crate. Four modules cover all file browser functionality.</p>
+
+          <h3>Module: <code>listing</code></h3>
+          <p>
+            <code>list_directory(path: &amp;Path) -&gt; Result&lt;Vec&lt;FileEntry&gt;&gt;</code>. Each
+            <code>FileEntry</code> has: name, <code>FileKind</code> (Dir/File/Symlink), size in bytes,
+            modified timestamp, Unix permissions.
+          </p>
+
+          <h3>Module: <code>ops</code></h3>
+          <p>File operations, all returning <code>anyhow::Result&lt;()&gt;</code>:</p>
+          <ul>
+            <li><code>copy_file(src, dst)</code> — recursive for directories</li>
+            <li><code>move_file(src, dst)</code> — rename, falls back to copy+delete across devices</li>
+            <li><code>rename_file(path, new_name)</code></li>
+            <li><code>delete_file(path)</code> — recursive delete</li>
+          </ul>
+
+          <h3>Module: <code>search</code></h3>
+          <p>
+            <code>search_directory(root: &amp;Path, opts: SearchOpts) -&gt; Result&lt;Vec&lt;SearchResult&gt;&gt;</code>.
+            Uses <code>walkdir</code> for recursive traversal. Filters by filename glob, content substring
+            (text files only), max depth. Returns path, file kind, size, and match context.
+          </p>
+
+          <h3>Module: <code>viewer</code></h3>
+          <p>
+            <code>view_file(path: &amp;Path) -&gt; Result&lt;ViewedContent&gt;</code>. Detects MIME type via
+            magic bytes + extension, then returns one of:
+          </p>
+          <ul>
+            <li><code>ViewedContent::Text(String)</code> — UTF-8 content (max ~1 MB)</li>
+            <li><code>ViewedContent::Image(Vec&lt;u8&gt;)</code> — raw bytes for iced's image widget</li>
+            <li><code>ViewedContent::Hex(Vec&lt;u8&gt;)</code> — first 4 KB for hex display</li>
+            <li><code>ViewedContent::TooLarge</code> — file exceeds viewer limit</li>
+          </ul>
+        </section>
+
+        <!-- ironkey-terminal -->
+        <section id="crate-terminal">
+          <h2><code>ironkey-terminal</code></h2>
+          <p>Library crate. PTY functionality is Linux-only via <code>portable-pty</code>.</p>
+
+          <h3><code>TerminalState</code></h3>
+          <p>
+            Screen buffer as <code>Vec&lt;Vec&lt;Cell&gt;&gt;</code>, each <code>Cell</code> holding a
+            character and SGR attributes (fg/bg colour, bold, italic, underline). Also tracks cursor
+            position and scrollback buffer.
+          </p>
+
+          <h3>VTE Integration</h3>
+          <p>
+            <code>vte::Parser</code> feeds raw bytes from the PTY into <code>TerminalState</code>. The
+            parser handles: cursor movement (CSI A/B/C/D), erase sequences (ED, EL), SGR colour codes
+            (8-colour, 256-colour, and truecolor), and alternate screen buffer.
+          </p>
+
+          <h3>PTY Spawner</h3>
+          <p>
+            Uses <code>portable-pty::native_pty_system()</code> to create a pty pair sized to the panel
+            dimensions. Spawns <code>zsh</code> with the IronKey environment variables. The master fd is
+            polled via an iced <code>Subscription</code>.
+          </p>
+
+          <p><strong>Dependencies:</strong> <code>vte 0.15</code>, <code>portable-pty 0.9</code> (Linux only), <code>thiserror</code>, <code>log</code></p>
+        </section>
+
+        <!-- xtask -->
+        <section id="crate-xtask">
+          <h2><code>xtask</code></h2>
+          <p>
+            Binary crate providing <code>cargo xtask &lt;command&gt;</code> build helpers. Not included in
+            the USB image. Used during development for tasks like version bumping and running pre-release
+            checks.
+          </p>
+          <div class="callout callout-tip">
+            <strong>Tip:</strong> Run <code>cargo xtask --help</code> to see available build automation commands.
+          </div>
+        </section>
+
+        <!-- OS Layer -->
+        <section id="os-layer">
+          <h2>OS Layer (<code>os/</code>)</h2>
+          <p>
+            The <code>os/</code> directory contains everything needed to produce a bootable USB image.
+            The <code>os/build.sh</code> script orchestrates 7 phases to produce a hybrid BIOS+UEFI
+            bootable ISO:
+          </p>
+
+          <ol class="steps-list">
+            <li>
+              <strong>Compile</strong> — <code>cargo build -p ironkey-app --release</code> with LTO + strip.
+              The resulting binary is ~10–20 MB.
+            </li>
+            <li>
+              <strong>Bootstrap</strong> — <code>debootstrap --variant=minbase bookworm</code> creates a
+              ~300 MB minimal Debian rootfs containing systemd, cage (Wayland kiosk compositor), zsh,
+              and udev.
+            </li>
+            <li>
+              <strong>Configure</strong> — Copies the binary to <code>/usr/bin/ironkey</code>, installs
+              shell configs (<code>/etc/zsh/</code>), starship config, and enables
+              <code>ironkey.service</code> via a symlink in <code>multi-user.target.wants/</code>.
+            </li>
+            <li>
+              <strong>squashfs</strong> — <code>mksquashfs -comp zstd -Xcompression-level 19</code>
+              compresses the rootfs to ~150–200 MB. <code>/proc</code>, <code>/sys</code>, and
+              <code>/dev</code> are excluded.
+            </li>
+            <li>
+              <strong>Kernel</strong> — Extracts <code>vmlinuz</code> and <code>initramfs.img</code>
+              from the debootstrap rootfs.
+            </li>
+            <li>
+              <strong>GRUB config</strong> — Copies <code>os/grub/grub.cfg</code> which sets
+              <code>timeout=0</code>, <code>loglevel=0</code>, and passes <code>quiet splash=0</code>
+              to the kernel for a silent boot.
+            </li>
+            <li>
+              <strong>Hybrid ISO</strong> — <code>grub-mkrescue</code> produces an ISO image with both
+              a BIOS MBR and a UEFI ESP, bootable via <code>dd</code> or Rufus.
+            </li>
+          </ol>
+
+          <h3>Runtime Behaviour</h3>
+          <ul>
+            <li>GRUB → Linux kernel → systemd init</li>
+            <li>systemd starts <code>ironkey.service</code> on <code>multi-user.target</code></li>
+            <li><code>ironkey.service</code> runs <code>cage -- ironkey</code> on tty1 as root</li>
+            <li><code>cage</code> is a Wayland kiosk compositor — IronKey is the sole Wayland client</li>
+            <li>All writes go to <code>tmpfs</code> mounts: <code>/tmp</code> (256 MB), <code>/var</code> (128 MB), <code>/run</code> (64 MB)</li>
+            <li>The squashfs rootfs is read-only; the live USB is fully ephemeral</li>
+          </ul>
+
+          <div class="callout callout-info">
+            <strong>Shell config:</strong> The <code>os/rootfs/etc/zsh/</code> directory ships
+            <code>zshrc</code> and <code>ironkey-aliases.zsh</code>. These are copied into the rootfs
+            during the Configure phase and provide all the Rust-native CLI aliases and
+            <code>ik-mount</code> helper function.
+          </div>
+
+          <h3>Build Command</h3>
+          <div class="code-header">
+            <span>Build the ISO</span>
+            <button class="copy-btn" aria-label="Copy code">Copy</button>
+          </div>
+          <pre><code>sudo bash os/build.sh ironkey-$(git describe --tags).iso</code></pre>
+
+          <div class="callout callout-warning">
+            <strong>Root required:</strong> <code>os/build.sh</code> must run as root because
+            <code>debootstrap</code>, <code>mksquashfs</code>, and <code>grub-mkrescue</code> require
+            root privileges and access to loop devices.
+          </div>
+
+          <div style="margin-top: 2.5rem;">
+            <a href="../install/" class="btn btn-primary">Installation Guide →</a>
+          </div>
+        </section>
+
+      </article>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <a href="../index.html" class="nav-logo">
+            <span class="logo-dot"></span>
+            ⚿ IronKey
+          </a>
+          <p>Bootable USB OS for forensics &amp; drive recovery. Built with Rust.</p>
+        </div>
+
+        <div class="footer-links">
+          <h4>Docs</h4>
+          <ul>
+            <li><a href="../getting-started/">Getting Started</a></li>
+            <li><a href="../install/">Installation</a></li>
+            <li><a href="../user-guide/">User Guide</a></li>
+            <li><a href="../tools/">Tools Reference</a></li>
+            <li><a href="../architecture/">Architecture</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-links">
+          <h4>Project</h4>
+          <ul>
+            <li><a href="https://github.com/0xnullsect0r/IronKey" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+            <li><a href="https://github.com/0xnullsect0r/IronKey/releases" target="_blank" rel="noopener noreferrer">Releases</a></li>
+            <li><a href="https://github.com/0xnullsect0r/IronKey/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">License (MIT)</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <p>© 2025 IronKey Contributors · MIT License</p>
+        <p>Built with Rust 🦀</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

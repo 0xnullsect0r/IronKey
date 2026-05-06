@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IronKey — A forensics &amp; recovery USB for every drive problem</title>
+  <meta name="description" content="IronKey is a bootable USB OS built in Rust. Mount LUKS, NTFS, and APFS drives. Recover data, manage partitions, and run a full forensics toolkit — all from a zero-install kiosk." />
+  <meta property="og:title" content="IronKey — Rust-powered bootable USB OS" />
+  <meta property="og:description" content="Mount LUKS, NTFS, and APFS drives. Recover data, manage partitions, and run a full forensics toolkit — all from a zero-install kiosk." />
+  <meta property="og:type" content="website" />
+  <meta name="theme-color" content="#f97316" />
+  <link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body>
+
+<!-- ===== NAV ===== -->
+<nav class="nav" role="navigation" aria-label="Main navigation">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo">
+      <span class="logo-dot"></span>
+      IronKey
+    </a>
+    <button class="nav-toggle" id="navToggle" aria-label="Toggle menu" aria-expanded="false">☰</button>
+    <ul class="nav-links" id="navLinks">
+      <li><a href="getting-started/">Getting Started</a></li>
+      <li><a href="install/">Install</a></li>
+      <li><a href="user-guide/">User Guide</a></li>
+      <li><a href="tools/">Tools</a></li>
+      <li><a href="architecture/">Architecture</a></li>
+      <li><a href="getting-started/" class="nav-cta">Get Started</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- ===== HERO ===== -->
+<section class="hero" aria-labelledby="hero-heading">
+  <div class="container">
+    <div class="hero-badge">⚿ v0.1.0 · Open Source · Rust · Bootable USB</div>
+    <h1 id="hero-heading">
+      A forensics &amp; recovery USB<br>
+      <span>for every drive problem.</span>
+    </h1>
+    <p class="hero-sub">
+      IronKey is a bootable USB OS built in Rust. Mount LUKS, NTFS, and APFS drives.
+      Recover data, manage partitions, and run a full forensics toolkit —
+      all from a zero-install kiosk.
+    </p>
+    <div class="hero-actions">
+      <a href="install/" class="btn btn-primary btn-lg">Build the ISO →</a>
+      <a href="getting-started/" class="btn btn-outline btn-lg">Read the Docs</a>
+    </div>
+    <div class="hero-stats">
+      <div class="hero-stat">
+        <span class="val">&lt; 3s</span>
+        <span class="lbl">Boot time</span>
+      </div>
+      <div class="hero-stat">
+        <span class="val">7</span>
+        <span class="lbl">Rust crates</span>
+      </div>
+      <div class="hero-stat">
+        <span class="val">10+</span>
+        <span class="lbl">Filesystem types</span>
+      </div>
+      <div class="hero-stat">
+        <span class="val">60+</span>
+        <span class="lbl">Pre-installed tools</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== FEATURES ===== -->
+<section class="section" aria-labelledby="features-heading">
+  <div class="container">
+    <div class="section-heading">
+      <span class="overline">Features</span>
+      <h2 id="features-heading">Everything your USB needs</h2>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">🖥️</div>
+        <h3>Drives Panel</h3>
+        <p>Enumerate every block device and partition. Mount, unmount, format, clone, or wipe drives with a single click.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📁</div>
+        <h3>File Browser</h3>
+        <p>Navigate any mounted filesystem. Copy, move, rename, delete, and preview files with a built-in viewer.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🖥</div>
+        <h3>Terminal</h3>
+        <p>Full PTY terminal with zsh, ANSI colour, and 60+ pre-installed tools ready to use.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔐</div>
+        <h3>LUKS / NTFS / APFS</h3>
+        <p>Mount encrypted Linux drives, Windows NTFS volumes, and macOS APFS containers natively.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🩺</div>
+        <h3>SMART Diagnostics</h3>
+        <p>Read ATA SMART health data for any attached drive directly from the Drives panel.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔍</div>
+        <h3>Forensics Suite</h3>
+        <p>testdisk, photorec, binwalk, dc3dd, Sleuth Kit, foremost, extundelete and more — all pre-installed.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🦀</div>
+        <h3>Rust-native CLI</h3>
+        <p>eza, bat, fd, ripgrep, dust, hexyl, procs, bottom — all aliased over their classic counterparts.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">⚡</div>
+        <h3>Zero-install Kiosk</h3>
+        <p>Boots directly into the IronKey GUI via cage Wayland compositor. No desktop, no login, just the tool.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== ARCHITECTURE / CRATES ===== -->
+<section class="section section-alt" aria-labelledby="arch-heading">
+  <div class="container">
+    <div class="section-heading">
+      <span class="overline">Architecture</span>
+      <h2 id="arch-heading">Six Rust crates, one tool</h2>
+    </div>
+    <div class="crate-grid">
+      <div class="crate-card">
+        <div class="crate-name">ironkey-app</div>
+        <p>Entry point. Initialises env_logger and launches the iced application.</p>
+      </div>
+      <div class="crate-card">
+        <div class="crate-name">ironkey-ui</div>
+        <p>iced 0.14 PaneGrid application. Manages the three-panel layout, all message routing, modals, and system tick.</p>
+      </div>
+      <div class="crate-card">
+        <div class="crate-name">ironkey-drives</div>
+        <p>Parses <code>/sys/block/</code> to enumerate drives and partitions. Reads SMART data via ATA ioctl. Handles format, clone, and wipe operations.</p>
+      </div>
+      <div class="crate-card">
+        <div class="crate-name">ironkey-mount</div>
+        <p>Detects filesystem types and mounts LUKS, NTFS, APFS, BitLocker, and generic volumes.</p>
+      </div>
+      <div class="crate-card">
+        <div class="crate-name">ironkey-browser</div>
+        <p>Directory listing, file operations (copy/move/rename/delete), content search, and file viewer.</p>
+      </div>
+      <div class="crate-card">
+        <div class="crate-name">ironkey-terminal</div>
+        <p>PTY spawner with VTE ANSI parser and terminal state renderer.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== GET STARTED / STEPS ===== -->
+<section class="section" aria-labelledby="started-heading">
+  <div class="container">
+    <div class="section-heading">
+      <span class="overline">Get Started</span>
+      <h2 id="started-heading">From clone to booted USB in 5 steps</h2>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <h3>Install Rust</h3>
+          <p>Install the Rust toolchain via rustup if you don't have it already.</p>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">sh</span>
+              <button class="copy-btn">Copy</button>
+            </div>
+            <pre><code>curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh</code></pre>
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <h3>Clone the repo</h3>
+          <p>Clone the IronKey repository and enter the project directory.</p>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">sh</span>
+              <button class="copy-btn">Copy</button>
+            </div>
+            <pre><code>git clone https://github.com/0xnullsect0r/IronKey.git &amp;&amp; cd IronKey</code></pre>
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <h3>Build the ISO</h3>
+          <p>Run the build script on a Debian or Ubuntu host. Requires root.</p>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">sh</span>
+              <button class="copy-btn">Copy</button>
+            </div>
+            <pre><code>sudo bash os/build.sh ironkey.iso</code></pre>
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <h3>Flash to USB</h3>
+          <p>Write the ISO to your USB drive. Replace <code>/dev/sdX</code> with your device path.</p>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-lang">sh</span>
+              <button class="copy-btn">Copy</button>
+            </div>
+            <pre><code>sudo ./write-usb.sh --drive /dev/sdX</code></pre>
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-body">
+          <h3>Boot</h3>
+          <p>Set USB as first boot device in BIOS/UEFI and reboot. IronKey loads automatically.</p>
+        </div>
+      </div>
+    </div>
+    <div style="text-align:center; margin-top:2.5rem;">
+      <a href="install/" class="btn btn-primary">Full installation guide →</a>
+    </div>
+  </div>
+</section>
+
+<!-- ===== TOOLS TABLE ===== -->
+<section class="section section-alt" aria-labelledby="tools-heading">
+  <div class="container">
+    <div class="section-heading">
+      <span class="overline">Shell &amp; CLI</span>
+      <h2 id="tools-heading">Modern tools, pre-installed</h2>
+      <p>Every common CLI tool replaced with a faster Rust alternative — aliased so nothing breaks.</p>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Traditional</th>
+            <th>IronKey Replacement</th>
+            <th>Why it's better</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>grep</code></td>
+            <td><code>ripgrep (rg)</code></td>
+            <td>10–100× faster, respects .gitignore</td>
+          </tr>
+          <tr>
+            <td><code>find</code></td>
+            <td><code>fd</code></td>
+            <td>Simpler syntax, faster, colorized output</td>
+          </tr>
+          <tr>
+            <td><code>ls</code></td>
+            <td><code>eza</code></td>
+            <td>Icons, colors, git status in listings</td>
+          </tr>
+          <tr>
+            <td><code>cat</code></td>
+            <td><code>bat</code></td>
+            <td>Syntax highlighting, line numbers, git diffs</td>
+          </tr>
+          <tr>
+            <td><code>du</code></td>
+            <td><code>dust</code></td>
+            <td>Instant visual disk usage tree</td>
+          </tr>
+          <tr>
+            <td><code>top/htop</code></td>
+            <td><code>bottom (btm)</code></td>
+            <td>Beautiful TUI, CPU/memory/network graphs</td>
+          </tr>
+          <tr>
+            <td><code>ps</code></td>
+            <td><code>procs</code></td>
+            <td>Colorized, human-readable process list</td>
+          </tr>
+          <tr>
+            <td><code>hexdump</code></td>
+            <td><code>hexyl</code></td>
+            <td>Color-coded hex viewer</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ===== FOOTER ===== -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <a href="index.html" class="nav-logo" style="margin-bottom:.5rem;">
+          <span class="logo-dot"></span>
+          IronKey
+        </a>
+        <p>A Rust-powered bootable USB OS for forensics, data recovery, and drive management.</p>
+      </div>
+      <div class="footer-links">
+        <h4>Docs</h4>
+        <ul>
+          <li><a href="getting-started/">Getting Started</a></li>
+          <li><a href="install/">Installation</a></li>
+          <li><a href="user-guide/">User Guide</a></li>
+          <li><a href="tools/">Tools Reference</a></li>
+          <li><a href="architecture/">Architecture</a></li>
+        </ul>
+      </div>
+      <div class="footer-links">
+        <h4>Project</h4>
+        <ul>
+          <li><a href="https://github.com/0xnullsect0r/IronKey" target="_blank" rel="noopener">GitHub</a></li>
+          <li><a href="https://github.com/0xnullsect0r/IronKey/releases" target="_blank" rel="noopener">Releases</a></li>
+          <li><a href="https://github.com/0xnullsect0r/IronKey/blob/main/LICENSE" target="_blank" rel="noopener">License (MIT)</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>© 2025 IronKey Contributors · MIT License</p>
+      <p>Built with Rust 🦀</p>
+    </div>
+  </div>
+</footer>
+
+<script src="assets/js/main.js"></script>
+</body>
+</html>

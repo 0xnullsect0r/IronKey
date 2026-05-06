@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pre-installed Tools — IronKey</title>
+  <meta name="description" content="Every tool bundled on the IronKey USB image — 60+ utilities for forensics, recovery, partition management, and daily use." />
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body>
+
+  <!-- Nav -->
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="../index.html" class="nav-logo">
+        <span class="logo-dot"></span>
+        ⚿ IronKey
+      </a>
+      <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+      <ul class="nav-links" id="navLinks">
+        <li><a href="../getting-started/">Getting Started</a></li>
+        <li><a href="../install/">Install</a></li>
+        <li><a href="../user-guide/">User Guide</a></li>
+        <li><a href="../tools/" class="active">Tools</a></li>
+        <li><a href="../architecture/">Architecture</a></li>
+        <li><a href="../getting-started/" class="nav-cta">Get Started</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Page Hero -->
+  <section class="page-hero">
+    <div class="container">
+      <h1>Pre-installed Tools</h1>
+      <p>Every tool bundled on the IronKey USB image — 60+ utilities for forensics, recovery, partition management, and daily use.</p>
+    </div>
+  </section>
+
+  <!-- Tool controls + table -->
+  <section class="section-sm">
+    <div class="container">
+
+      <div class="tool-controls">
+        <input id="toolSearch" class="tool-search" type="search" placeholder="Search tools…" aria-label="Search tools" />
+        <select id="categoryFilter" class="tool-filter" aria-label="Filter by category">
+          <option value="">All categories</option>
+          <option value="shells">Shells</option>
+          <option value="rust-native">Rust-native CLI</option>
+          <option value="partition-editors">Partition Editors</option>
+          <option value="fs-management">Filesystem Management</option>
+          <option value="mounting">Mounting</option>
+          <option value="bootloader">Bootloader</option>
+          <option value="forensics">Forensics</option>
+          <option value="system">System</option>
+          <option value="text">Text Processing</option>
+          <option value="editors">Editors</option>
+        </select>
+        <span id="toolCount" class="tool-count"></span>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Tool</th>
+              <th>Category</th>
+              <th>Purpose</th>
+            </tr>
+          </thead>
+          <tbody id="toolTableBody">
+
+            <!-- Shells -->
+            <tr data-category="shells">
+              <td><code>zsh</code></td>
+              <td><span class="category-badge cat-shell">Shells</span></td>
+              <td>Default interactive shell</td>
+            </tr>
+            <tr data-category="shells">
+              <td><code>bash</code></td>
+              <td><span class="category-badge cat-shell">Shells</span></td>
+              <td>POSIX fallback shell</td>
+            </tr>
+
+            <!-- Rust-native CLI -->
+            <tr data-category="rust-native">
+              <td><code>eza</code></td>
+              <td><span class="category-badge cat-rust">Rust-native CLI</span></td>
+              <td>ls replacement with icons, colors, and git status</td>
+            </tr>
+            <tr data-category="rust-native">
+              <td><code>bat</code></td>
+              <td><span class="category-badge cat-rust">Rust-native CLI</span></td>
+              <td>cat with syntax highlighting and line numbers</td>
+            </tr>
+            <tr data-category="rust-native">
+              <td><code>fd</code></td>
+              <td><span class="category-badge cat-rust">Rust-native CLI</span></td>
+              <td>Fast and intuitive file search</td>
+            </tr>
+            <tr data-category="rust-native">
+              <td><code>rg</code></td>
+              <td><span class="category-badge cat-rust">Rust-native CLI</span></td>
+              <td>ripgrep — fast content search, respects .gitignore</td>
+            </tr>
+            <tr data-category="rust-native">
+              <td><code>dust</code></td>
+              <td><span class="category-badge cat-rust">Rust-native CLI</span></td>
+              <td>Disk usage visualizer (du replacement)</td>
+            </tr>
+            <tr data-category="rust-native">
+              <td><code>hexyl</code></td>
+              <td><span class="category-badge cat-rust">Rust-native CLI</span></td>
+              <td>Color-coded hex viewer</td>
+            </tr>
+            <tr data-category="rust-native">
+              <td><code>sd</code></td>
+              <td><span class="category-badge cat-rust">Rust-native CLI</span></td>
+              <td>Stream editor (intuitive sed replacement)</td>
+            </tr>
+            <tr data-category="rust-native">
+              <td><code>procs</code></td>
+              <td><span class="category-badge cat-rust">Rust-native CLI</span></td>
+              <td>Colorized process viewer (ps replacement)</td>
+            </tr>
+            <tr data-category="rust-native">
+              <td><code>btm</code></td>
+              <td><span class="category-badge cat-rust">Rust-native CLI</span></td>
+              <td>bottom — TUI system monitor (top/htop replacement)</td>
+            </tr>
+            <tr data-category="rust-native">
+              <td><code>xcp</code></td>
+              <td><span class="category-badge cat-rust">Rust-native CLI</span></td>
+              <td>Fast file copy with progress bar</td>
+            </tr>
+            <tr data-category="rust-native">
+              <td><code>ouch</code></td>
+              <td><span class="category-badge cat-rust">Rust-native CLI</span></td>
+              <td>Compress/decompress any archive format</td>
+            </tr>
+            <tr data-category="rust-native">
+              <td><code>starship</code></td>
+              <td><span class="category-badge cat-rust">Rust-native CLI</span></td>
+              <td>Cross-shell prompt with git and context awareness</td>
+            </tr>
+
+            <!-- Partition Editors -->
+            <tr data-category="partition-editors">
+              <td><code>fdisk</code></td>
+              <td><span class="category-badge cat-partition">Partition Editors</span></td>
+              <td>Classic MBR/GPT partition editor (interactive + scriptable)</td>
+            </tr>
+            <tr data-category="partition-editors">
+              <td><code>gdisk</code></td>
+              <td><span class="category-badge cat-partition">Partition Editors</span></td>
+              <td>GPT-only partition editor, more robust for GPT disks</td>
+            </tr>
+            <tr data-category="partition-editors">
+              <td><code>cgdisk</code></td>
+              <td><span class="category-badge cat-partition">Partition Editors</span></td>
+              <td>Curses-based GPT partition editor</td>
+            </tr>
+            <tr data-category="partition-editors">
+              <td><code>sgdisk</code></td>
+              <td><span class="category-badge cat-partition">Partition Editors</span></td>
+              <td>Scripted/non-interactive gdisk — ideal for automation</td>
+            </tr>
+            <tr data-category="partition-editors">
+              <td><code>parted</code></td>
+              <td><span class="category-badge cat-partition">Partition Editors</span></td>
+              <td>GNU Parted — supports MBR + GPT, scriptable</td>
+            </tr>
+            <tr data-category="partition-editors">
+              <td><code>sfdisk</code></td>
+              <td><span class="category-badge cat-partition">Partition Editors</span></td>
+              <td>Script-friendly fdisk — JSON output, ideal for imaging</td>
+            </tr>
+            <tr data-category="partition-editors">
+              <td><code>cfdisk</code></td>
+              <td><span class="category-badge cat-partition">Partition Editors</span></td>
+              <td>Curses-based fdisk with simple visual interface</td>
+            </tr>
+            <tr data-category="partition-editors">
+              <td><code>gparted</code></td>
+              <td><span class="category-badge cat-partition">Partition Editors</span></td>
+              <td>GTK partition editor — launch via <code>cage -d -- gparted</code></td>
+            </tr>
+
+            <!-- Filesystem Management -->
+            <tr data-category="fs-management">
+              <td><code>mkfs.ext4</code></td>
+              <td><span class="category-badge cat-fs">Filesystem</span></td>
+              <td>Create ext4 filesystems</td>
+            </tr>
+            <tr data-category="fs-management">
+              <td><code>mkfs.ext3</code></td>
+              <td><span class="category-badge cat-fs">Filesystem</span></td>
+              <td>Create ext3 filesystems</td>
+            </tr>
+            <tr data-category="fs-management">
+              <td><code>mkfs.ext2</code></td>
+              <td><span class="category-badge cat-fs">Filesystem</span></td>
+              <td>Create ext2 filesystems</td>
+            </tr>
+            <tr data-category="fs-management">
+              <td><code>mkfs.fat</code></td>
+              <td><span class="category-badge cat-fs">Filesystem</span></td>
+              <td>Create FAT12/16/32 filesystems</td>
+            </tr>
+            <tr data-category="fs-management">
+              <td><code>mkfs.exfat</code></td>
+              <td><span class="category-badge cat-fs">Filesystem</span></td>
+              <td>Create exFAT filesystems</td>
+            </tr>
+            <tr data-category="fs-management">
+              <td><code>mkfs.ntfs</code></td>
+              <td><span class="category-badge cat-fs">Filesystem</span></td>
+              <td>Create NTFS filesystems</td>
+            </tr>
+            <tr data-category="fs-management">
+              <td><code>mkfs.btrfs</code></td>
+              <td><span class="category-badge cat-fs">Filesystem</span></td>
+              <td>Create btrfs filesystems</td>
+            </tr>
+            <tr data-category="fs-management">
+              <td><code>mkfs.xfs</code></td>
+              <td><span class="category-badge cat-fs">Filesystem</span></td>
+              <td>Create XFS filesystems</td>
+            </tr>
+            <tr data-category="fs-management">
+              <td><code>mkfs.f2fs</code></td>
+              <td><span class="category-badge cat-fs">Filesystem</span></td>
+              <td>Create F2FS filesystems (flash-friendly)</td>
+            </tr>
+            <tr data-category="fs-management">
+              <td><code>mkswap</code></td>
+              <td><span class="category-badge cat-fs">Filesystem</span></td>
+              <td>Create swap partition or file</td>
+            </tr>
+            <tr data-category="fs-management">
+              <td><code>mke2fs</code></td>
+              <td><span class="category-badge cat-fs">Filesystem</span></td>
+              <td>Low-level ext filesystem creation</td>
+            </tr>
+            <tr data-category="fs-management">
+              <td><code>tune2fs</code></td>
+              <td><span class="category-badge cat-fs">Filesystem</span></td>
+              <td>Adjust ext2/3/4 filesystem parameters</td>
+            </tr>
+            <tr data-category="fs-management">
+              <td><code>resize2fs</code></td>
+              <td><span class="category-badge cat-fs">Filesystem</span></td>
+              <td>Resize ext2/3/4 filesystems online or offline</td>
+            </tr>
+            <tr data-category="fs-management">
+              <td><code>e2fsck</code></td>
+              <td><span class="category-badge cat-fs">Filesystem</span></td>
+              <td>ext2/3/4 filesystem check and repair</td>
+            </tr>
+            <tr data-category="fs-management">
+              <td><code>fsck</code></td>
+              <td><span class="category-badge cat-fs">Filesystem</span></td>
+              <td>Generic filesystem checker</td>
+            </tr>
+            <tr data-category="fs-management">
+              <td><code>fsck.fat</code></td>
+              <td><span class="category-badge cat-fs">Filesystem</span></td>
+              <td>FAT filesystem check and repair</td>
+            </tr>
+            <tr data-category="fs-management">
+              <td><code>fsck.exfat</code></td>
+              <td><span class="category-badge cat-fs">Filesystem</span></td>
+              <td>exFAT filesystem check and repair</td>
+            </tr>
+            <tr data-category="fs-management">
+              <td><code>ntfsfix</code></td>
+              <td><span class="category-badge cat-fs">Filesystem</span></td>
+              <td>NTFS quick fix (clear dirty bit, fix boot sector)</td>
+            </tr>
+
+            <!-- Mounting -->
+            <tr data-category="mounting">
+              <td><code>mount</code></td>
+              <td><span class="category-badge cat-mounting">Mounting</span></td>
+              <td>Standard Linux mount</td>
+            </tr>
+            <tr data-category="mounting">
+              <td><code>umount</code></td>
+              <td><span class="category-badge cat-mounting">Mounting</span></td>
+              <td>Standard Linux unmount</td>
+            </tr>
+            <tr data-category="mounting">
+              <td><code>apfs-fuse</code></td>
+              <td><span class="category-badge cat-mounting">Mounting</span></td>
+              <td>Mount APFS volumes from macOS drives (read-only)</td>
+            </tr>
+            <tr data-category="mounting">
+              <td><code>ntfs-3g</code></td>
+              <td><span class="category-badge cat-mounting">Mounting</span></td>
+              <td>Userspace NTFS driver (fallback if ntfs3 module unavailable)</td>
+            </tr>
+            <tr data-category="mounting">
+              <td><code>zpool</code></td>
+              <td><span class="category-badge cat-mounting">Mounting</span></td>
+              <td>OpenZFS pool management</td>
+            </tr>
+            <tr data-category="mounting">
+              <td><code>zfs</code></td>
+              <td><span class="category-badge cat-mounting">Mounting</span></td>
+              <td>OpenZFS filesystem management</td>
+            </tr>
+            <tr data-category="mounting">
+              <td><code>bindfs</code></td>
+              <td><span class="category-badge cat-mounting">Mounting</span></td>
+              <td>FUSE bind-mount with permission remapping</td>
+            </tr>
+
+            <!-- Bootloader -->
+            <tr data-category="bootloader">
+              <td><code>grub-install</code></td>
+              <td><span class="category-badge cat-bootloader">Bootloader</span></td>
+              <td>Install GRUB2 bootloader to a disk</td>
+            </tr>
+            <tr data-category="bootloader">
+              <td><code>grub-mkconfig</code></td>
+              <td><span class="category-badge cat-bootloader">Bootloader</span></td>
+              <td>Generate GRUB config (grub.cfg)</td>
+            </tr>
+            <tr data-category="bootloader">
+              <td><code>efibootmgr</code></td>
+              <td><span class="category-badge cat-bootloader">Bootloader</span></td>
+              <td>Manage UEFI boot entries — add, remove, reorder</td>
+            </tr>
+            <tr data-category="bootloader">
+              <td><code>syslinux</code></td>
+              <td><span class="category-badge cat-bootloader">Bootloader</span></td>
+              <td>Syslinux/Extlinux bootloader tools</td>
+            </tr>
+
+            <!-- Forensics -->
+            <tr data-category="forensics">
+              <td><code>testdisk</code></td>
+              <td><span class="category-badge cat-forensics">Forensics</span></td>
+              <td>Recover lost partitions, fix partition tables, make disks bootable</td>
+            </tr>
+            <tr data-category="forensics">
+              <td><code>photorec</code></td>
+              <td><span class="category-badge cat-forensics">Forensics</span></td>
+              <td>File carving — recover deleted files by type from raw disk</td>
+            </tr>
+            <tr data-category="forensics">
+              <td><code>extundelete</code></td>
+              <td><span class="category-badge cat-forensics">Forensics</span></td>
+              <td>Recover deleted files from ext3/ext4 partitions</td>
+            </tr>
+            <tr data-category="forensics">
+              <td><code>ext4magic</code></td>
+              <td><span class="category-badge cat-forensics">Forensics</span></td>
+              <td>Recover deleted/overwritten files from ext3/ext4 journals</td>
+            </tr>
+            <tr data-category="forensics">
+              <td><code>ntfsundelete</code></td>
+              <td><span class="category-badge cat-forensics">Forensics</span></td>
+              <td>Recover recently deleted files from NTFS partitions</td>
+            </tr>
+            <tr data-category="forensics">
+              <td><code>foremost</code></td>
+              <td><span class="category-badge cat-forensics">Forensics</span></td>
+              <td>File carving by header/footer signatures</td>
+            </tr>
+            <tr data-category="forensics">
+              <td><code>scalpel</code></td>
+              <td><span class="category-badge cat-forensics">Forensics</span></td>
+              <td>Fast file carver, foremost-derived, configurable signatures</td>
+            </tr>
+            <tr data-category="forensics">
+              <td><code>safecopy</code></td>
+              <td><span class="category-badge cat-forensics">Forensics</span></td>
+              <td>Recover data from damaged media with configurable error handling</td>
+            </tr>
+            <tr data-category="forensics">
+              <td><code>dc3dd</code></td>
+              <td><span class="category-badge cat-forensics">Forensics</span></td>
+              <td>Forensic dd — hashing on the fly, split output, error log</td>
+            </tr>
+            <tr data-category="forensics">
+              <td><code>mmls</code></td>
+              <td><span class="category-badge cat-forensics">Forensics</span></td>
+              <td>Sleuth Kit: display partition layout of a volume system</td>
+            </tr>
+            <tr data-category="forensics">
+              <td><code>fsstat</code></td>
+              <td><span class="category-badge cat-forensics">Forensics</span></td>
+              <td>Sleuth Kit: filesystem statistics</td>
+            </tr>
+            <tr data-category="forensics">
+              <td><code>fls</code></td>
+              <td><span class="category-badge cat-forensics">Forensics</span></td>
+              <td>Sleuth Kit: list files and directories</td>
+            </tr>
+            <tr data-category="forensics">
+              <td><code>icat</code></td>
+              <td><span class="category-badge cat-forensics">Forensics</span></td>
+              <td>Sleuth Kit: output file content by inode</td>
+            </tr>
+            <tr data-category="forensics">
+              <td><code>blkcat</code></td>
+              <td><span class="category-badge cat-forensics">Forensics</span></td>
+              <td>Sleuth Kit: output block content</td>
+            </tr>
+            <tr data-category="forensics">
+              <td><code>binwalk</code></td>
+              <td><span class="category-badge cat-forensics">Forensics</span></td>
+              <td>Firmware/binary analysis, embedded filesystem extraction</td>
+            </tr>
+            <tr data-category="forensics">
+              <td><code>strings</code></td>
+              <td><span class="category-badge cat-forensics">Forensics</span></td>
+              <td>Extract printable strings from any binary or disk image</td>
+            </tr>
+            <tr data-category="forensics">
+              <td><code>hexedit</code></td>
+              <td><span class="category-badge cat-forensics">Forensics</span></td>
+              <td>Interactive terminal hex editor for raw disk editing</td>
+            </tr>
+
+            <!-- System -->
+            <tr data-category="system">
+              <td><code>htop</code></td>
+              <td><span class="category-badge cat-system">System</span></td>
+              <td>Interactive process viewer (ncurses)</td>
+            </tr>
+            <tr data-category="system">
+              <td><code>lsof</code></td>
+              <td><span class="category-badge cat-system">System</span></td>
+              <td>List open files and the processes using them</td>
+            </tr>
+            <tr data-category="system">
+              <td><code>fuser</code></td>
+              <td><span class="category-badge cat-system">System</span></td>
+              <td>Identify processes using a file or mount point</td>
+            </tr>
+            <tr data-category="system">
+              <td><code>strace</code></td>
+              <td><span class="category-badge cat-system">System</span></td>
+              <td>Trace system calls — debug why a tool or mount is failing</td>
+            </tr>
+            <tr data-category="system">
+              <td><code>udevadm</code></td>
+              <td><span class="category-badge cat-system">System</span></td>
+              <td>Query and monitor udev device events</td>
+            </tr>
+            <tr data-category="system">
+              <td><code>lspci</code></td>
+              <td><span class="category-badge cat-system">System</span></td>
+              <td>List PCI devices (storage controllers, GPU)</td>
+            </tr>
+            <tr data-category="system">
+              <td><code>lsusb</code></td>
+              <td><span class="category-badge cat-system">System</span></td>
+              <td>List USB devices</td>
+            </tr>
+
+            <!-- Text Processing -->
+            <tr data-category="text">
+              <td><code>jq</code></td>
+              <td><span class="category-badge cat-text">Text</span></td>
+              <td>JSON processor (parses <code>lsblk -J</code> output, etc.)</td>
+            </tr>
+            <tr data-category="text">
+              <td><code>awk</code></td>
+              <td><span class="category-badge cat-text">Text</span></td>
+              <td>Pattern scanning and text processing</td>
+            </tr>
+
+            <!-- Editors -->
+            <tr data-category="editors">
+              <td><code>nano</code></td>
+              <td><span class="category-badge cat-editors">Editors</span></td>
+              <td>Beginner-friendly terminal text editor</td>
+            </tr>
+            <tr data-category="editors">
+              <td><code>vim</code></td>
+              <td><span class="category-badge cat-editors">Editors</span></td>
+              <td>Advanced terminal text editor</td>
+            </tr>
+            <tr data-category="editors">
+              <td><code>micro</code></td>
+              <td><span class="category-badge cat-editors">Editors</span></td>
+              <td>Modern terminal editor with mouse support and clipboard</td>
+            </tr>
+
+          </tbody>
+        </table>
+      </div>
+
+      <div id="noResults" style="display:none; text-align:center; padding:3rem; color:var(--text-3);">
+        No tools match your search.
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <a href="../index.html" class="nav-logo">
+            <span class="logo-dot"></span>
+            ⚿ IronKey
+          </a>
+          <p>Bootable USB OS for forensics &amp; drive recovery. Built with Rust.</p>
+        </div>
+
+        <div class="footer-links">
+          <h4>Docs</h4>
+          <ul>
+            <li><a href="../getting-started/">Getting Started</a></li>
+            <li><a href="../install/">Installation</a></li>
+            <li><a href="../user-guide/">User Guide</a></li>
+            <li><a href="../tools/">Tools Reference</a></li>
+            <li><a href="../architecture/">Architecture</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-links">
+          <h4>Project</h4>
+          <ul>
+            <li><a href="https://github.com/0xnullsect0r/IronKey" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+            <li><a href="https://github.com/0xnullsect0r/IronKey/releases" target="_blank" rel="noopener noreferrer">Releases</a></li>
+            <li><a href="https://github.com/0xnullsect0r/IronKey/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">License (MIT)</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <p>© 2025 IronKey Contributors · MIT License</p>
+        <p>Built with Rust 🦀</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

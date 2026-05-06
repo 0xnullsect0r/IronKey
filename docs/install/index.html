@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Installation Guide — IronKey</title>
+  <meta name="description" content="Build IronKey from source, create a bootable ISO, and flash it to a USB drive." />
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body>
+
+  <!-- ============================================================
+       NAV
+  ============================================================ -->
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="../index.html" class="nav-logo">⚿ IronKey</a>
+      <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+      <ul class="nav-links" id="navLinks">
+        <li><a href="../getting-started/">Getting Started</a></li>
+        <li><a href="../install/" class="active">Install</a></li>
+        <li><a href="../user-guide/">User Guide</a></li>
+        <li><a href="../tools/">Tools</a></li>
+        <li><a href="../architecture/">Architecture</a></li>
+        <li><a href="../getting-started/" class="nav-cta">Get Started</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- ============================================================
+       PAGE HERO
+  ============================================================ -->
+  <section class="page-hero">
+    <div class="container">
+      <h1>Installation Guide</h1>
+      <p>Build IronKey from source, create a bootable ISO, and flash it to a USB drive.</p>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       DOC LAYOUT
+  ============================================================ -->
+  <div class="container">
+    <div class="doc-layout">
+
+      <!-- TOC -->
+      <aside class="toc">
+        <h4>On this page</h4>
+        <ul>
+          <li><a href="#build-source">Build from Source</a></li>
+          <li><a href="#build-iso">Build the Bootable ISO</a></li>
+          <li class="toc-sub">
+            <ul>
+              <li><a href="#iso-requirements">Host Requirements</a></li>
+              <li><a href="#iso-steps">Build Steps</a></li>
+            </ul>
+          </li>
+          <li><a href="#flash-usb">Flash to USB</a></li>
+          <li><a href="#booting">Booting IronKey</a></li>
+        </ul>
+      </aside>
+
+      <!-- DOC CONTENT -->
+      <main class="doc-content">
+
+        <!-- ── Build from Source ── -->
+        <h2 id="build-source">Build from Source</h2>
+
+        <p>
+          This section covers building and running IronKey directly on a Linux desktop for
+          development and testing purposes. It does <strong>not</strong> produce a bootable USB
+          image — see <a href="#build-iso">Build the Bootable ISO</a> for that.
+        </p>
+
+        <h3>Prerequisites</h3>
+        <ul>
+          <li>Rust stable toolchain (via <code>rustup</code>)</li>
+          <li>Linux (X11 or Wayland)</li>
+          <li><code>libGL</code> (typically provided by your GPU driver or <code>mesa</code>)</li>
+        </ul>
+
+        <h3>Install Rust</h3>
+        <div class="code-block">
+          <div class="code-header">
+            <span>shell</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <pre><code>curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"</code></pre>
+        </div>
+
+        <h3>Clone and Build</h3>
+        <div class="code-block">
+          <div class="code-header">
+            <span>shell</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <pre><code>git clone https://github.com/0xnullsect0r/IronKey.git
+cd IronKey
+cargo build -p ironkey-app --release</code></pre>
+        </div>
+
+        <h3>Run</h3>
+        <div class="code-block">
+          <div class="code-header">
+            <span>shell</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <pre><code>./target/release/ironkey</code></pre>
+        </div>
+
+        <div class="callout callout-info">
+          <span class="callout-icon">ℹ️</span>
+          <div class="callout-body">
+            <strong>Note</strong>
+            <p>Running outside the bootable image means the GUI launches as a regular window. The Drives panel requires root to enumerate block devices.</p>
+          </div>
+        </div>
+
+        <!-- ── Build the Bootable ISO ── -->
+        <h2 id="build-iso">Build the Bootable ISO</h2>
+
+        <p>
+          To create a proper bootable USB image you need to run the included build script, which
+          automates bootstrapping a minimal Debian root filesystem, compiling the IronKey binary,
+          and assembling a hybrid BIOS/UEFI ISO.
+        </p>
+
+        <!-- Host Requirements -->
+        <h3 id="iso-requirements">Host Requirements</h3>
+
+        <div class="callout callout-warning">
+          <span class="callout-icon">⚠️</span>
+          <div class="callout-body">
+            <strong>Root required on Debian / Ubuntu</strong>
+            <p>The ISO build script must be run as root on a Debian or Ubuntu host. It uses <code>debootstrap</code> to bootstrap a minimal Debian bookworm rootfs.</p>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Requirement</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Host OS</td>
+                <td>Debian 12 / Ubuntu 22.04+</td>
+              </tr>
+              <tr>
+                <td>Privileges</td>
+                <td>Must be run as root (<code>sudo</code>)</td>
+              </tr>
+              <tr>
+                <td>Disk space</td>
+                <td>≥ 4 GB free in <code>/tmp</code></td>
+              </tr>
+              <tr>
+                <td>Packages</td>
+                <td><code>debootstrap squashfs-tools grub-pc-bin grub-efi-amd64-bin xorriso mtools</code></td>
+              </tr>
+              <tr>
+                <td>Rust toolchain</td>
+                <td><code>rustup</code> with <code>stable</code> toolchain</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>Install the required packages:</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span>shell</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <pre><code>sudo apt install debootstrap squashfs-tools grub-pc-bin grub-efi-amd64-bin xorriso mtools</code></pre>
+        </div>
+
+        <!-- Build Steps -->
+        <h3 id="iso-steps">Build Steps</h3>
+
+        <div class="callout callout-info">
+          <span class="callout-icon">ℹ️</span>
+          <div class="callout-body">
+            <strong>One command</strong>
+            <p>The build script automates all 7 phases. Running <code>sudo bash os/build.sh ironkey.iso</code> is all you need.</p>
+          </div>
+        </div>
+
+        <div class="code-block">
+          <div class="code-header">
+            <span>shell</span>
+            <button class="copy-btn">Copy</button>
+          </div>
+          <pre><code>sudo bash os/build.sh ironkey.iso</code></pre>
+        </div>
+
+        <p>The script performs the following 7 phases in sequence:</p>
+        <ol>
+          <li><strong>Compile binary</strong> — <code>cargo build -p ironkey-app --release</code> produces a static-linked <code>ironkey</code> binary.</li>
+          <li><strong>Bootstrap rootfs</strong> — <code>debootstrap --variant=minbase bookworm</code> creates a minimal Debian root filesystem with systemd, cage, zsh, and udev.</li>
+          <li><strong>Configure rootfs</strong> — Copies the IronKey binary, shell configs, starship config, and enables the <code>ironkey.service</code> systemd unit.</li>
+          <li><strong>Pack squashfs</strong> — Compresses the rootfs with <code>mksquashfs -comp zstd -Xcompression-level 19</code> for maximum compression.</li>
+          <li><strong>Copy kernel</strong> — Extracts <code>vmlinuz</code> and <code>initramfs.img</code> from the bootstrapped rootfs.</li>
+          <li><strong>Set up GRUB</strong> — Copies the GRUB config for the bootloader menu.</li>
+          <li><strong>Build hybrid ISO</strong> — <code>grub-mkrescue</code> produces a hybrid ISO/USB image bootable from both BIOS and UEFI.</li>
+        </ol>
+
+        <div class="callout callout-success">
+          <span class="callout-icon">✅</span>
+          <div class="callout-body">
+            <strong>Build complete</strong>
+            <p>On success the ISO is written to the path you specified (e.g. <code>ironkey.iso</code>). A SHA-256 checksum is also printed.</p>
+          </div>
+        </div>
+
+        <!-- ── Flash to USB ── -->
+        <h2 id="flash-usb">Flash to USB</h2>
+
+        <div class="callout callout-danger">
+          <span class="callout-icon">🚨</span>
+          <div class="callout-body">
+            <strong>Data loss warning</strong>
+            <p>Flashing will <strong>permanently erase</strong> all data on the target drive. Double-check the device path before continuing.</p>
+          </div>
+        </div>
+
+        <div class="platform-tabs">
+          <div class="tab-btns">
+            <button class="tab-btn" data-tab="linux">Linux</button>
+            <button class="tab-btn" data-tab="windows">Windows</button>
+            <button class="tab-btn" data-tab="macos">macOS</button>
+          </div>
+
+          <!-- Linux -->
+          <div class="tab-panel" data-tab="linux">
+            <p>Use the included <code>write-usb.sh</code> helper:</p>
+            <div class="code-block">
+              <div class="code-header">
+                <span>shell</span>
+                <button class="copy-btn">Copy</button>
+              </div>
+              <pre><code># Identify your USB drive
+lsblk
+
+# Flash using the write-usb.sh helper
+sudo ./write-usb.sh --drive /dev/sdX --iso ironkey.iso</code></pre>
+            </div>
+            <p>Or manually with <code>dd</code>:</p>
+            <div class="code-block">
+              <div class="code-header">
+                <span>shell</span>
+                <button class="copy-btn">Copy</button>
+              </div>
+              <pre><code>sudo dd if=ironkey.iso of=/dev/sdX bs=4M status=progress conv=fsync
+sync</code></pre>
+            </div>
+          </div>
+
+          <!-- Windows -->
+          <div class="tab-panel" data-tab="windows">
+            <p>Download and install <strong>Rufus</strong> from <a href="https://rufus.ie" target="_blank" rel="noopener">https://rufus.ie</a>, then follow these steps:</p>
+            <ol>
+              <li>Open Rufus and select your USB drive from the <strong>Device</strong> dropdown.</li>
+              <li>Click <strong>SELECT</strong> and choose your <code>ironkey.iso</code> file.</li>
+              <li>Leave <strong>Partition scheme</strong> as MBR or GPT depending on your target machine's firmware.</li>
+              <li>Click <strong>START</strong> and confirm the warning.</li>
+              <li>Wait for the operation to complete, then safely eject the drive.</li>
+            </ol>
+          </div>
+
+          <!-- macOS -->
+          <div class="tab-panel" data-tab="macos">
+            <p>Using <code>dd</code>:</p>
+            <div class="code-block">
+              <div class="code-header">
+                <span>shell</span>
+                <button class="copy-btn">Copy</button>
+              </div>
+              <pre><code># Find your USB disk number
+diskutil list
+
+# Unmount the disk (replace N with your disk number)
+diskutil unmountDisk /dev/diskN
+
+# Flash the ISO
+sudo dd if=ironkey.iso of=/dev/rdiskN bs=4m
+sync</code></pre>
+            </div>
+            <p>Or use <strong>balenaEtcher</strong> (<a href="https://etcher.balena.io" target="_blank" rel="noopener">https://etcher.balena.io</a>) for a GUI option.</p>
+          </div>
+        </div>
+
+        <!-- ── Booting IronKey ── -->
+        <h2 id="booting">Booting IronKey</h2>
+
+        <ol>
+          <li>Insert the USB drive into the target machine.</li>
+          <li>Enter BIOS/UEFI setup (usually <kbd>F2</kbd>, <kbd>F12</kbd>, <kbd>Del</kbd>, or <kbd>Esc</kbd> at boot).</li>
+          <li>Set the USB drive as the first boot device.</li>
+          <li>Save and exit — IronKey will boot directly into the GUI.</li>
+        </ol>
+
+        <div class="callout callout-info">
+          <span class="callout-icon">ℹ️</span>
+          <div class="callout-body">
+            <strong>Silent boot</strong>
+            <p>IronKey boots silently (kernel log level 0) directly into the fullscreen GUI via the <code>cage</code> Wayland kiosk compositor. No login prompt, no desktop environment.</p>
+          </div>
+        </div>
+
+        <div class="callout callout-warning">
+          <span class="callout-icon">⚠️</span>
+          <div class="callout-body">
+            <strong>Disable Secure Boot</strong>
+            <p><strong>Secure Boot</strong> must be disabled in UEFI firmware settings. IronKey's GRUB image is not signed with a Microsoft-trusted key.</p>
+          </div>
+        </div>
+
+        <h3>What you'll see on boot</h3>
+        <p>
+          After a few seconds the IronKey GUI fills the screen: Drives panel on the left, File
+          Browser in the center, Terminal on the right. The Drives panel automatically enumerates
+          all detected block devices.
+        </p>
+        <p>
+          <a href="../user-guide/">Learn about the interface →</a>
+        </p>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       FOOTER
+  ============================================================ -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-inner">
+
+        <div class="footer-brand">
+          <a href="../index.html" class="nav-logo">⚿ IronKey</a>
+          <p>A Rust-powered bootable USB OS for forensics, data recovery, and drive management.</p>
+        </div>
+
+        <div class="footer-links">
+          <h4>Docs</h4>
+          <ul>
+            <li><a href="../getting-started/">Getting Started</a></li>
+            <li><a href="../install/">Installation</a></li>
+            <li><a href="../user-guide/">User Guide</a></li>
+            <li><a href="../tools/">Tools</a></li>
+            <li><a href="../architecture/">Architecture</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-links">
+          <h4>Project</h4>
+          <ul>
+            <li><a href="https://github.com/0xnullsect0r/IronKey" target="_blank" rel="noopener">GitHub</a></li>
+            <li><a href="https://github.com/0xnullsect0r/IronKey/releases" target="_blank" rel="noopener">Releases</a></li>
+            <li><a href="https://github.com/0xnullsect0r/IronKey/blob/main/LICENSE" target="_blank" rel="noopener">License (MIT)</a></li>
+          </ul>
+        </div>
+
+      </div>
+
+      <div class="footer-bottom">
+        <p>© 2025 IronKey Contributors · MIT License</p>
+        <p>Built with Rust 🦀</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Getting Started — IronKey</title>
+  <meta name="description" content="Everything you need to build, flash, and boot IronKey in under 30 minutes." />
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body>
+
+  <!-- ============================================================
+       Navigation
+  ============================================================ -->
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="../index.html" class="nav-logo">
+        <span class="logo-dot"></span>
+        ⚿ IronKey
+      </a>
+
+      <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+
+      <ul class="nav-links" id="navLinks">
+        <li><a href="../getting-started/" class="active">Getting Started</a></li>
+        <li><a href="../install/">Install</a></li>
+        <li><a href="../user-guide/">User Guide</a></li>
+        <li><a href="../tools/">Tools</a></li>
+        <li><a href="../architecture/">Architecture</a></li>
+        <li><a href="../getting-started/" class="nav-cta">Get Started</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- ============================================================
+       Page Hero
+  ============================================================ -->
+  <section class="page-hero">
+    <div class="container">
+      <h1>Getting Started</h1>
+      <p>Everything you need to build, flash, and boot IronKey in under 30 minutes.</p>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       Doc Layout
+  ============================================================ -->
+  <div class="container">
+    <div class="doc-layout">
+
+      <!-- TOC Sidebar -->
+      <aside class="toc">
+        <h4>On this page</h4>
+        <ul>
+          <li><a href="#prerequisites">Prerequisites</a></li>
+          <li><a href="#step1">1. Install Rust</a></li>
+          <li><a href="#step2">2. Clone the Repo</a></li>
+          <li><a href="#step3">3. Build the ISO</a></li>
+          <li><a href="#step4">4. Flash to USB</a></li>
+          <li><a href="#step5">5. Boot IronKey</a></li>
+          <li><a href="#next-steps">Next Steps</a></li>
+        </ul>
+      </aside>
+
+      <!-- Main Content -->
+      <main class="doc-content">
+
+        <!-- ---- Prerequisites ---- -->
+        <section id="prerequisites">
+          <h2>Prerequisites</h2>
+          <p>Before you begin, make sure your build machine meets these requirements.</p>
+
+          <ul class="checklist">
+            <li>
+              <span class="check">✓</span>
+              <span>Debian 12 or Ubuntu 22.04+ (for the ISO build script)</span>
+            </li>
+            <li>
+              <span class="check">✓</span>
+              <span>Root / sudo privileges</span>
+            </li>
+            <li>
+              <span class="check">✓</span>
+              <span>At least 4 GB of free disk space in <code>/tmp</code></span>
+            </li>
+            <li>
+              <span class="check">✓</span>
+              <span>Internet connection (debootstrap pulls packages)</span>
+            </li>
+            <li>
+              <span class="check">✓</span>
+              <span>Rust stable toolchain (installed in Step 1)</span>
+            </li>
+            <li>
+              <span class="check">✓</span>
+              <span>Required packages: <code>debootstrap squashfs-tools grub-pc-bin grub-efi-amd64-bin xorriso mtools</code></span>
+            </li>
+          </ul>
+
+          <div class="callout callout-info">
+            <span class="callout-icon">ℹ️</span>
+            <div class="callout-body">
+              <strong>Other Linux distros</strong>
+              <p>Building on other Linux distros is possible but unsupported — <code>debootstrap</code> is available on most Debian-derived systems. On Arch: <code>sudo pacman -S debootstrap</code>.</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ---- Step 1 ---- -->
+        <section id="step1">
+          <h2>Step 1: Install Rust</h2>
+          <p>Install the Rust toolchain via <code>rustup</code>:</p>
+
+          <div class="code-block">
+            <div class="code-header">
+              <span>bash</span>
+              <button class="copy-btn">Copy</button>
+            </div>
+            <pre><code>curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh</code></pre>
+          </div>
+
+          <p>Reload your shell's PATH to activate the newly installed toolchain:</p>
+
+          <div class="code-block">
+            <div class="code-header">
+              <span>bash</span>
+              <button class="copy-btn">Copy</button>
+            </div>
+            <pre><code>source "$HOME/.cargo/env"</code></pre>
+          </div>
+
+          <p>Verify the installation:</p>
+
+          <div class="code-block">
+            <div class="code-header">
+              <span>bash</span>
+              <button class="copy-btn">Copy</button>
+            </div>
+            <pre><code>rustc --version
+cargo --version</code></pre>
+          </div>
+        </section>
+
+        <!-- ---- Step 2 ---- -->
+        <section id="step2">
+          <h2>Step 2: Clone the Repository</h2>
+          <p>Clone the IronKey source code from GitHub and enter the project directory:</p>
+
+          <div class="code-block">
+            <div class="code-header">
+              <span>bash</span>
+              <button class="copy-btn">Copy</button>
+            </div>
+            <pre><code>git clone https://github.com/0xnullsect0r/IronKey.git
+cd IronKey</code></pre>
+          </div>
+        </section>
+
+        <!-- ---- Step 3 ---- -->
+        <section id="step3">
+          <h2>Step 3: Build the ISO</h2>
+          <p>Install the required system packages first:</p>
+
+          <div class="code-block">
+            <div class="code-header">
+              <span>bash</span>
+              <button class="copy-btn">Copy</button>
+            </div>
+            <pre><code>sudo apt install debootstrap squashfs-tools grub-pc-bin grub-efi-amd64-bin xorriso mtools</code></pre>
+          </div>
+
+          <p>Then run the build script to produce the bootable ISO image:</p>
+
+          <div class="code-block">
+            <div class="code-header">
+              <span>bash</span>
+              <button class="copy-btn">Copy</button>
+            </div>
+            <pre><code>sudo bash os/build.sh ironkey.iso</code></pre>
+          </div>
+
+          <div class="callout callout-info">
+            <span class="callout-icon">ℹ️</span>
+            <div class="callout-body">
+              <strong>Build time</strong>
+              <p>The build takes 5–15 minutes on a fast machine. It bootstraps a full Debian bookworm rootfs, compiles the IronKey binary, and packs everything into a hybrid ISO.</p>
+            </div>
+          </div>
+
+          <div class="callout callout-success">
+            <span class="callout-icon">💡</span>
+            <div class="callout-body">
+              <strong>Custom output path</strong>
+              <p>You can pass a custom output path: <code>sudo bash os/build.sh /path/to/my-ironkey.iso</code></p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ---- Step 4 ---- -->
+        <section id="step4">
+          <h2>Step 4: Flash to USB</h2>
+
+          <div class="callout callout-warning">
+            <span class="callout-icon">⚠️</span>
+            <div class="callout-body">
+              <strong>Data loss warning</strong>
+              <p><strong>This will erase all data on the target drive.</strong> Verify the device path with <code>lsblk</code> before running.</p>
+            </div>
+          </div>
+
+          <p>Use the included helper script to identify and write to your USB drive:</p>
+
+          <div class="code-block">
+            <div class="code-header">
+              <span>bash</span>
+              <button class="copy-btn">Copy</button>
+            </div>
+            <pre><code>lsblk
+sudo ./write-usb.sh --drive /dev/sdX --iso ironkey.iso</code></pre>
+          </div>
+
+          <p>Or write manually with <code>dd</code>:</p>
+
+          <div class="code-block">
+            <div class="code-header">
+              <span>bash</span>
+              <button class="copy-btn">Copy</button>
+            </div>
+            <pre><code>sudo dd if=ironkey.iso of=/dev/sdX bs=4M status=progress conv=fsync &amp;&amp; sync</code></pre>
+          </div>
+
+          <div class="callout callout-info">
+            <span class="callout-icon">ℹ️</span>
+            <div class="callout-body">
+              <strong>Other platforms</strong>
+              <p>On Windows, use <strong>Rufus</strong> (<a href="https://rufus.ie" target="_blank" rel="noopener noreferrer">https://rufus.ie</a>). On macOS, use <strong>balenaEtcher</strong> or <code>dd</code>. See the <a href="../install/">full installation guide</a> for platform-specific instructions.</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ---- Step 5 ---- -->
+        <section id="step5">
+          <h2>Step 5: Boot IronKey</h2>
+
+          <ol>
+            <li>Insert the USB drive into the target machine.</li>
+            <li>Enter BIOS/UEFI (<kbd>F2</kbd>, <kbd>F12</kbd>, <kbd>Del</kbd>, or <kbd>Esc</kbd> at startup).</li>
+            <li>Disable <strong>Secure Boot</strong>.</li>
+            <li>Set the USB drive as the first boot device.</li>
+            <li>Save and reboot.</li>
+          </ol>
+
+          <p>IronKey boots silently into the fullscreen GUI in seconds. No login, no desktop manager — just the tool.</p>
+
+          <div class="callout callout-success">
+            <span class="callout-icon">✅</span>
+            <div class="callout-body">
+              <strong>You're in!</strong>
+              <p>The Drives panel on the left automatically lists all detected block devices. Plug in additional drives and click <strong>Refresh</strong> to update the list.</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ---- Next Steps ---- -->
+        <section id="next-steps">
+          <h2>Next Steps</h2>
+          <p>Now that IronKey is running, explore what it can do:</p>
+
+          <div class="crate-grid">
+            <a href="../user-guide/" class="crate-card" style="text-decoration:none;">
+              <div class="crate-name">User Guide</div>
+              <p>Learn the 3-panel interface, available operations, and keyboard shortcuts.</p>
+            </a>
+            <a href="../tools/" class="crate-card" style="text-decoration:none;">
+              <div class="crate-name">Tools Reference</div>
+              <p>Browse all 60+ pre-installed forensics and recovery tools.</p>
+            </a>
+            <a href="../architecture/" class="crate-card" style="text-decoration:none;">
+              <div class="crate-name">Architecture</div>
+              <p>Understand the Rust crate structure and OS layer.</p>
+            </a>
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       Footer
+  ============================================================ -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-inner">
+        <div class="footer-brand">
+          <a href="../index.html" class="nav-logo">
+            <span class="logo-dot"></span>
+            ⚿ IronKey
+          </a>
+          <p>A Rust-based bootable USB OS for forensics and drive recovery.</p>
+        </div>
+
+        <div class="footer-links">
+          <h4>Docs</h4>
+          <ul>
+            <li><a href="../getting-started/">Getting Started</a></li>
+            <li><a href="../install/">Install</a></li>
+            <li><a href="../user-guide/">User Guide</a></li>
+            <li><a href="../tools/">Tools</a></li>
+            <li><a href="../architecture/">Architecture</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-links">
+          <h4>Project</h4>
+          <ul>
+            <li><a href="https://github.com/0xnullsect0r/IronKey" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+            <li><a href="https://github.com/0xnullsect0r/IronKey/issues" target="_blank" rel="noopener noreferrer">Issues</a></li>
+            <li><a href="https://github.com/0xnullsect0r/IronKey/releases" target="_blank" rel="noopener noreferrer">Releases</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <p>© 2024 IronKey — MIT License</p>
+        <p>Built with Rust 🦀</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

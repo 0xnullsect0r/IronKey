@@ -1,0 +1,91 @@
+name: Release ISO
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-iso:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            debootstrap \
+            squashfs-tools \
+            grub-pc-bin \
+            grub-efi-amd64-bin \
+            xorriso \
+            mtools
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-
+
+      - name: Cache build artifacts
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-build-
+
+      - name: Build IronKey ISO
+        run: |
+          ISO_NAME="ironkey-${{ github.ref_name }}.iso"
+          sudo bash os/build.sh "$ISO_NAME"
+          echo "ISO_NAME=$ISO_NAME" >> "$GITHUB_ENV"
+
+      - name: Compute SHA-256 checksum
+        run: |
+          sha256sum "$ISO_NAME" > "$ISO_NAME.sha256"
+          cat "$ISO_NAME.sha256"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: IronKey ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          body: |
+            ## IronKey ${{ github.ref_name }}
+
+            ### Download
+            | File | Description |
+            |------|-------------|
+            | `ironkey-${{ github.ref_name }}.iso` | Bootable USB image (BIOS + UEFI) |
+            | `ironkey-${{ github.ref_name }}.iso.sha256` | SHA-256 checksum |
+
+            ### Flash to USB
+            **Linux:**
+            ```bash
+            sudo ./write-usb.sh --drive /dev/sdX --iso ironkey-${{ github.ref_name }}.iso
+            ```
+            **Windows:** Use [Rufus](https://rufus.ie)
+            **macOS:** Use [balenaEtcher](https://etcher.balena.io) or `dd`
+
+            ### Verify checksum
+            ```bash
+            sha256sum -c ironkey-${{ github.ref_name }}.iso.sha256
+            ```
+          files: |
+            ${{ env.ISO_NAME }}
+            ${{ env.ISO_NAME }}.sha256

@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>User Guide — IronKey</title>
+  <meta name="description" content="A complete walkthrough of the IronKey interface — panels, operations, modals, and keyboard shortcuts." />
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body>
+
+  <!-- ============================================================
+       Navigation
+  ============================================================ -->
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="../index.html" class="nav-logo">
+        <span class="logo-dot"></span>
+        ⚿ IronKey
+      </a>
+
+      <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+
+      <ul class="nav-links" id="navLinks">
+        <li><a href="../getting-started/">Getting Started</a></li>
+        <li><a href="../install/">Install</a></li>
+        <li><a href="../user-guide/" class="active">User Guide</a></li>
+        <li><a href="../tools/">Tools</a></li>
+        <li><a href="../architecture/">Architecture</a></li>
+        <li><a href="../getting-started/" class="nav-cta">Get Started</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- ============================================================
+       Page Hero
+  ============================================================ -->
+  <section class="page-hero">
+    <div class="container">
+      <h1>User Guide</h1>
+      <p>A complete walkthrough of the IronKey interface — panels, operations, modals, and keyboard shortcuts.</p>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       Doc Layout
+  ============================================================ -->
+  <div class="container">
+    <div class="doc-layout">
+
+      <!-- ---- TOC Sidebar ---- -->
+      <aside>
+        <nav class="toc" aria-label="On this page">
+          <h4>On this page</h4>
+          <ul>
+            <li><a href="#layout">Interface Layout</a></li>
+            <li><a href="#drives-panel">Drives Panel</a>
+              <ul class="toc-sub">
+                <li><a href="#drives-operations">Operations</a></li>
+                <li><a href="#drives-smart">SMART Diagnostics</a></li>
+              </ul>
+            </li>
+            <li><a href="#browser-panel">File Browser Panel</a>
+              <ul class="toc-sub">
+                <li><a href="#browser-ops">File Operations</a></li>
+                <li><a href="#browser-search">Search</a></li>
+                <li><a href="#browser-viewer">File Viewer</a></li>
+              </ul>
+            </li>
+            <li><a href="#terminal-panel">Terminal Panel</a></li>
+            <li><a href="#modals">Modals Reference</a></li>
+            <li><a href="#shortcuts">Keyboard Shortcuts</a></li>
+          </ul>
+        </nav>
+      </aside>
+
+      <!-- ---- Main Doc Content ---- -->
+      <main class="doc-content">
+
+        <!-- ========================
+             Interface Layout
+        ========================= -->
+        <section id="layout">
+          <h2>Interface Layout</h2>
+          <p>
+            IronKey uses a three-panel <strong>PaneGrid</strong> layout managed by the
+            <code>iced</code> 0.14 framework. The left panel shows connected drives and block
+            devices, the centre panel provides a full file browser, and the right panel embeds a
+            live PTY terminal. Panels can be resized by dragging the dividers between them. Focus
+            a panel by clicking anywhere inside it or by pressing <kbd>Tab</kbd> to cycle between
+            panels.
+          </p>
+
+          <div class="panel-diagram">
+<pre>
+┌──────────────────────────────────────────────────────────────┐
+│  ⚿ IronKey                                       [Shutdown]  │
+├─────────────────┬────────────────────┬───────────────────────┤
+│   DRIVES        │   FILE BROWSER     │   TERMINAL            │
+│                 │                    │                        │
+│  ● /dev/sda     │  /mnt/usb0         │  $ ls /mnt            │
+│    ├ sda1 vfat  │  📁 Documents      │  usb0  usb1  backup   │
+│    └ sda2 ext4  │  📁 Downloads      │                        │
+│                 │  📄 notes.txt      │  $ ik-mount /dev/sdb1  │
+│  ● /dev/sdb     │  📄 passwords.kdbx │  Passphrase: ••••••   │
+│    └ sdb1 luks  │                    │  Mounted at /mnt/sdb1  │
+│                 │                    │                        │
+│  [Mount] [Info] │  [Copy] [Delete]   │                        │
+└─────────────────┴────────────────────┴───────────────────────┘
+</pre>
+          </div>
+
+          <div class="callout callout-info">
+            <span class="callout-icon">ℹ️</span>
+            <div class="callout-body">
+              <strong>Kiosk vs Desktop</strong>
+              <p>IronKey runs fullscreen in a Wayland kiosk (cage). On a desktop build, the window is resizable and decorations are enabled.</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========================
+             Drives Panel
+        ========================= -->
+        <section id="drives-panel">
+          <h2>Drives Panel</h2>
+          <p>
+            The Drives panel enumerates all block devices by reading <code>/sys/block/</code>.
+            Each drive shows its model, size, and partitions. Click a partition to select it;
+            the action buttons below respond to the selection.
+          </p>
+
+          <h3 id="drives-operations">Operations</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Button</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Mount</strong></td>
+                  <td>Mounts the selected partition. If the filesystem is LUKS-encrypted a passphrase prompt appears. NTFS and APFS are also handled automatically.</td>
+                </tr>
+                <tr>
+                  <td><strong>Unmount</strong></td>
+                  <td>Safely unmounts the currently mounted partition.</td>
+                </tr>
+                <tr>
+                  <td><strong>Format</strong></td>
+                  <td>Opens the format dialog. Choose filesystem type (ext4, FAT32, exFAT, NTFS, btrfs) and confirm by typing the device name.</td>
+                </tr>
+                <tr>
+                  <td><strong>Clone</strong></td>
+                  <td>Copies the raw device to a <code>.img</code> file on another mounted path using a block-level copy.</td>
+                </tr>
+                <tr>
+                  <td><strong>Wipe</strong></td>
+                  <td>Securely overwrites the partition with zeros or random data. Choose <strong>Fast</strong> (zeros) or <strong>Secure</strong> (random, multiple passes).</td>
+                </tr>
+                <tr>
+                  <td><strong>Info</strong></td>
+                  <td>Opens a modal with full partition details and SMART health data (if available).</td>
+                </tr>
+                <tr>
+                  <td><strong>New Table</strong></td>
+                  <td>Creates a new GPT or MBR partition table on the selected drive (destructive — requires typing the device name to confirm).</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3 id="drives-smart">SMART Diagnostics</h3>
+          <p>
+            Select a partition and click <strong>Info</strong> to open the SMART panel. IronKey
+            reads ATA SMART attributes via <code>ioctl</code> directly from the kernel — no
+            <code>smartmontools</code> required.
+          </p>
+          <p>The following attributes are displayed:</p>
+          <ul>
+            <li>Overall health status</li>
+            <li>Temperature</li>
+            <li>Power-on hours</li>
+            <li>Reallocated sector count</li>
+            <li>Pending sector count</li>
+            <li>Uncorrectable sector count</li>
+            <li>Read error rate</li>
+          </ul>
+        </section>
+
+        <!-- ========================
+             File Browser Panel
+        ========================= -->
+        <section id="browser-panel">
+          <h2>File Browser Panel</h2>
+          <p>
+            The File Browser shows the contents of any mounted path. Navigate with single clicks;
+            the path bar at the top shows your current location.
+          </p>
+
+          <h3 id="browser-ops">File Operations</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Button</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Copy</strong> (<kbd>Ctrl</kbd>+<kbd>C</kbd>)</td>
+                  <td>Marks selected files for copy.</td>
+                </tr>
+                <tr>
+                  <td><strong>Cut</strong> (<kbd>Ctrl</kbd>+<kbd>X</kbd>)</td>
+                  <td>Marks selected files for move.</td>
+                </tr>
+                <tr>
+                  <td><strong>Paste</strong> (<kbd>Ctrl</kbd>+<kbd>V</kbd>)</td>
+                  <td>Executes the pending copy or move into the current directory.</td>
+                </tr>
+                <tr>
+                  <td><strong>Rename</strong> (<kbd>F2</kbd>)</td>
+                  <td>Renames the selected file or folder inline.</td>
+                </tr>
+                <tr>
+                  <td><strong>Delete</strong> (<kbd>Del</kbd>)</td>
+                  <td>Moves the selected item to a temporary trash or deletes permanently (confirmation required).</td>
+                </tr>
+                <tr>
+                  <td><strong>Properties</strong></td>
+                  <td>Shows a modal with file size, permissions, timestamps, and MIME type.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3 id="browser-search">Search</h3>
+          <p>
+            Press <kbd>Ctrl</kbd>+<kbd>F</kbd> or click the search icon to open the search bar.
+            IronKey recursively walks the current directory tree using <code>walkdir</code> and
+            matches by filename or content substring.
+          </p>
+
+          <div class="callout callout-info">
+            <span class="callout-icon">ℹ️</span>
+            <div class="callout-body">
+              <strong>Search scope</strong>
+              <p>Search indexes the current directory at the time of query. For large drives, narrow your search by navigating into a subdirectory first.</p>
+            </div>
+          </div>
+
+          <h3 id="browser-viewer">File Viewer</h3>
+          <p>
+            Double-click any file to open it in the built-in viewer. IronKey detects the MIME
+            type and renders:
+          </p>
+          <ul>
+            <li><strong>Text / code files</strong> — syntax-highlighted (bash, Python, Rust, JSON, YAML, etc.)</li>
+            <li><strong>Images</strong> — displayed inline (PNG, JPEG, GIF, BMP, WebP)</li>
+            <li><strong>Binary files</strong> — shown as a hex dump</li>
+          </ul>
+        </section>
+
+        <!-- ========================
+             Terminal Panel
+        ========================= -->
+        <section id="terminal-panel">
+          <h2>Terminal Panel</h2>
+          <p>
+            The Terminal panel embeds a full PTY terminal using <code>portable-pty</code>. It
+            spawns <code>zsh</code> as the default shell with the IronKey environment loaded.
+          </p>
+
+          <h3>Shell Environment</h3>
+          <ul>
+            <li>Default shell: <code>zsh</code> with <code>starship</code> prompt</li>
+            <li>All 60+ pre-installed tools available on <code>$PATH</code></li>
+            <li>Rust-native tools aliased over their classic counterparts</li>
+            <li><code>EDITOR=micro</code>, <code>PAGER=less</code>, <code>TERM=xterm-256color</code></li>
+          </ul>
+
+          <h3><code>ik-mount</code> Helper</h3>
+          <p>
+            The <code>ik-mount</code> shell function provides a quick way to mount drives from
+            the terminal:
+          </p>
+
+          <div class="code-block">
+            <div class="code-header">
+              <span>bash</span>
+              <button class="copy-btn" aria-label="Copy code">Copy</button>
+            </div>
+<pre><code># Mount a drive (prompts for passphrase if LUKS)
+ik-mount /dev/sdb1
+
+# Mount to a specific path
+ik-mount /dev/sdb1 /mnt/recovery</code></pre>
+          </div>
+
+          <div class="callout callout-info">
+            <span class="callout-icon">ℹ️</span>
+            <div class="callout-body">
+              <strong>Shared state</strong>
+              <p>The terminal and the Drives panel share state — mounting a drive in the terminal will reflect in the Drives panel after clicking Refresh.</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========================
+             Modals Reference
+        ========================= -->
+        <section id="modals">
+          <h2>Modals Reference</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Modal</th>
+                  <th>Trigger</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Passphrase</strong></td>
+                  <td>Mount on a LUKS partition</td>
+                  <td>Enter the LUKS decryption passphrase. Input is masked.</td>
+                </tr>
+                <tr>
+                  <td><strong>Format</strong></td>
+                  <td>Format button</td>
+                  <td>Choose filesystem type, confirm by typing the device name (e.g. <code>sda1</code>).</td>
+                </tr>
+                <tr>
+                  <td><strong>Progress</strong></td>
+                  <td>Clone / Wipe operations</td>
+                  <td>Shows live progress bar, transfer speed, and ETA.</td>
+                </tr>
+                <tr>
+                  <td><strong>Info / SMART</strong></td>
+                  <td>Info button</td>
+                  <td>Partition details and SMART health table.</td>
+                </tr>
+                <tr>
+                  <td><strong>File Viewer</strong></td>
+                  <td>Double-click a file</td>
+                  <td>Rendered file content (text, hex, image).</td>
+                </tr>
+                <tr>
+                  <td><strong>Properties</strong></td>
+                  <td>Properties button</td>
+                  <td>File size, permissions, owner, timestamps, MIME type.</td>
+                </tr>
+                <tr>
+                  <td><strong>Shutdown</strong></td>
+                  <td>Shutdown button</td>
+                  <td>Confirm graceful system shutdown.</td>
+                </tr>
+                <tr>
+                  <td><strong>Reboot</strong></td>
+                  <td>Reboot button</td>
+                  <td>Confirm system reboot.</td>
+                </tr>
+                <tr>
+                  <td><strong>New Table</strong></td>
+                  <td>New Table button</td>
+                  <td>Creates a new partition table. Requires typing the device name.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ========================
+             Keyboard Shortcuts
+        ========================= -->
+        <section id="shortcuts">
+          <h2>Keyboard Shortcuts</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Shortcut</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><kbd>Tab</kbd></td>
+                  <td>Cycle focus between panels</td>
+                </tr>
+                <tr>
+                  <td><kbd>Ctrl</kbd>+<kbd>C</kbd></td>
+                  <td>Copy selected file(s)</td>
+                </tr>
+                <tr>
+                  <td><kbd>Ctrl</kbd>+<kbd>X</kbd></td>
+                  <td>Cut selected file(s)</td>
+                </tr>
+                <tr>
+                  <td><kbd>Ctrl</kbd>+<kbd>V</kbd></td>
+                  <td>Paste</td>
+                </tr>
+                <tr>
+                  <td><kbd>F2</kbd></td>
+                  <td>Rename selected file</td>
+                </tr>
+                <tr>
+                  <td><kbd>Del</kbd></td>
+                  <td>Delete selected file</td>
+                </tr>
+                <tr>
+                  <td><kbd>Ctrl</kbd>+<kbd>F</kbd></td>
+                  <td>Open search</td>
+                </tr>
+                <tr>
+                  <td><kbd>Ctrl</kbd>+<kbd>R</kbd> / <kbd>F5</kbd></td>
+                  <td>Refresh drives and browser</td>
+                </tr>
+                <tr>
+                  <td><kbd>Escape</kbd></td>
+                  <td>Close modal / cancel operation</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+      </main>
+      <!-- /.doc-content -->
+
+    </div>
+    <!-- /.doc-layout -->
+  </div>
+  <!-- /.container -->
+
+  <!-- ============================================================
+       Footer
+  ============================================================ -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-inner">
+
+        <div class="footer-brand">
+          <a href="../index.html" class="nav-logo">
+            <span class="logo-dot"></span>
+            ⚿ IronKey
+          </a>
+          <p>A Rust + iced forensics toolkit and secure OS for drive recovery, analysis, and data management.</p>
+        </div>
+
+        <div class="footer-links">
+          <h4>Documentation</h4>
+          <ul>
+            <li><a href="../getting-started/">Getting Started</a></li>
+            <li><a href="../install/">Install</a></li>
+            <li><a href="../user-guide/">User Guide</a></li>
+            <li><a href="../tools/">Tools</a></li>
+            <li><a href="../architecture/">Architecture</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-links">
+          <h4>Project</h4>
+          <ul>
+            <li><a href="https://github.com/0xnullsect0r/IronKey" target="_blank" rel="noopener">GitHub</a></li>
+            <li><a href="https://github.com/0xnullsect0r/IronKey/releases" target="_blank" rel="noopener">Releases</a></li>
+            <li><a href="https://github.com/0xnullsect0r/IronKey/issues" target="_blank" rel="noopener">Issues</a></li>
+            <li><a href="https://github.com/0xnullsect0r/IronKey/blob/main/LICENSE" target="_blank" rel="noopener">License</a></li>
+          </ul>
+        </div>
+
+      </div>
+
+      <div class="footer-bottom">
+        <p>© 2025 IronKey. Built with Rust and <a href="https://github.com/iced-rs/iced" target="_blank" rel="noopener">iced</a>.</p>
+        <p>Released under the MIT License.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>
