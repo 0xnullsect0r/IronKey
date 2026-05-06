@@ -1,0 +1,171 @@
+# IronKey — default shell configuration
+# This file is the main .zshrc for the IronKey recovery USB.
+# Every tool below is available on the USB image.
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Environment
+# ──────────────────────────────────────────────────────────────────────────────
+export IRONKEY_VERSION="0.1.0"
+export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+export EDITOR="micro"
+export VISUAL="micro"
+export PAGER="less"
+export LESS="-R --quit-if-one-screen"
+export TERM="xterm-256color"
+export COLORTERM="truecolor"
+export HISTFILE="/tmp/.zsh_history"
+export HISTSIZE=10000
+export SAVEHIST=10000
+setopt HIST_IGNORE_DUPS SHARE_HISTORY
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Starship prompt (Rust-based)
+# ──────────────────────────────────────────────────────────────────────────────
+if command -v starship &>/dev/null; then
+    eval "$(starship init zsh)"
+fi
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Load alias definitions
+# ──────────────────────────────────────────────────────────────────────────────
+[[ -f /etc/zsh/ironkey-aliases.zsh ]] && source /etc/zsh/ironkey-aliases.zsh
+
+# ──────────────────────────────────────────────────────────────────────────────
+# IronKey helper functions
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Mount a drive interactively, asking for passphrase if encrypted.
+ik-mount() {
+    if [[ -z "$1" ]]; then
+        echo "Usage: ik-mount <device> [mountpoint]"
+        echo "Example: ik-mount /dev/sda1"
+        return 1
+    fi
+    local dev="$1"
+    local mp="${2:-/mnt/ironkey/$(basename $dev)}"
+    mkdir -p "$mp"
+    local fstype
+    fstype=$(blkid -o value -s TYPE "$dev" 2>/dev/null || echo "auto")
+    echo "Detected filesystem: $fstype"
+    case "$fstype" in
+        crypto_LUKS)
+            echo -n "LUKS passphrase for $dev: "
+            read -s pass
+            echo
+            cryptsetup open "$dev" "ik_$(basename $dev)" <<< "$pass" && \
+                mount "/dev/mapper/ik_$(basename $dev)" "$mp" && \
+                echo "Mounted at $mp"
+            ;;
+        BitLocker)
+            echo -n "BitLocker passphrase: "
+            read -s pass
+            echo
+            local staging="/mnt/.dislocker_$(basename $dev)"
+            mkdir -p "$staging"
+            dislocker-fuse -u "$pass" "$dev" -- "$staging" && \
+                mount -o loop "$staging/dislocker-file" "$mp" && \
+                echo "Mounted at $mp"
+            ;;
+        apfs)
+            apfs-fuse -o allow_other "$dev" "$mp" && echo "Mounted APFS (read-only) at $mp"
+            ;;
+        *)
+            mount "$dev" "$mp" && echo "Mounted at $mp"
+            ;;
+    esac
+}
+
+# Unmount by device or mountpoint
+ik-umount() {
+    if [[ -z "$1" ]]; then
+        echo "Usage: ik-umount <device|mountpoint>"
+        return 1
+    fi
+    umount "$1" && echo "Unmounted: $1"
+}
+
+# Show a quick disk summary
+ik-disks() {
+    echo "=== Block Devices ==="
+    lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT,LABEL,UUID
+    echo ""
+    echo "=== Disk Usage ==="
+    df -h --exclude-type=tmpfs --exclude-type=devtmpfs 2>/dev/null || df -h
+}
+
+# Clone a partition or disk with progress
+ik-clone() {
+    if [[ $# -lt 2 ]]; then
+        echo "Usage: ik-clone <source> <destination>"
+        echo "Example: ik-clone /dev/sda /dev/sdb"
+        echo "Example: ik-clone /dev/sda1 /mnt/usb/backup.img"
+        return 1
+    fi
+    echo "Cloning $1 → $2"
+    echo "WARNING: This will overwrite $2. Press Ctrl+C to abort in 5 seconds..."
+    sleep 5
+    if command -v ddrescue &>/dev/null; then
+        ddrescue -d -r3 "$1" "$2" /tmp/ddrescue.log
+    else
+        pv "$1" | dd of="$2" bs=4M status=progress conv=fsync
+    fi
+}
+
+# SMART health check
+ik-smart() {
+    local dev="${1:-/dev/sda}"
+    if command -v smartctl &>/dev/null; then
+        smartctl -a "$dev"
+    else
+        echo "smartctl not found; trying hdparm..."
+        hdparm -I "$dev" | grep -E "Model|Serial|Health|Temperature"
+    fi
+}
+
+# Hash a file or device
+ik-hash() {
+    local target="${1:-.}"
+    echo "SHA-256: $(sha256sum "$target")"
+    echo "MD5:     $(md5sum "$target")"
+}
+
+# Wipe a device (zero-fill)
+ik-wipe() {
+    if [[ -z "$1" ]]; then
+        echo "Usage: ik-wipe <device>"
+        return 1
+    fi
+    echo "WARNING: This will ZERO-FILL $1. All data will be lost!"
+    echo "Type YES to confirm:"
+    read confirm
+    if [[ "$confirm" == "YES" ]]; then
+        pv /dev/zero | dd of="$1" bs=4M conv=fsync status=progress
+    else
+        echo "Aborted."
+    fi
+}
+
+# Quick forensic info about a device
+ik-info() {
+    local dev="${1:-/dev/sda}"
+    echo "=== Device: $dev ==="
+    echo "--- fdisk ---"
+    fdisk -l "$dev" 2>/dev/null || echo "(not a partitioned device)"
+    echo "--- blkid ---"
+    blkid "$dev" 2>/dev/null
+    echo "--- file ---"
+    file -s "$dev" 2>/dev/null
+    echo "--- Size ---"
+    blockdev --getsize64 "$dev" 2>/dev/null | numfmt --to=iec 2>/dev/null || \
+        du -sh "$dev" 2>/dev/null
+}
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Welcome banner
+# ──────────────────────────────────────────────────────────────────────────────
+echo ""
+echo "  ◈ IRONKEY v${IRONKEY_VERSION} — USB Recovery & Forensics Tool"
+echo "  Type 'ik-disks' for a quick disk overview"
+echo "  Type 'ik-mount <dev>' to mount a partition"
+echo "  Type 'ik-clone <src> <dst>' to clone a disk"
+echo ""

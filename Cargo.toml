@@ -1,0 +1,33 @@
+[workspace]
+members = [
+    "xtask",
+    "ironkey-app",
+    "ironkey-ui",
+    "ironkey-drives",
+    "ironkey-mount",
+    "ironkey-browser",
+    "ironkey-terminal",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["IronKey Contributors"]
+
+[workspace.dependencies]
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+log = "0.4"
+env_logger = "0.11"
+walkdir = "2"
+chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

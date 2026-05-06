@@ -1,0 +1,14 @@
+[package]
+name = "ironkey-terminal"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true
+log.workspace = true
+vte = "0.15"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+portable-pty = "0.9"

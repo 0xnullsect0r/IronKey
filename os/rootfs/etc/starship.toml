@@ -1,0 +1,43 @@
+# IronKey — Starship prompt theme
+# File: /etc/starship.toml
+
+format = """
+[◈ IRONKEY](bold cyan) \
+[$directory](bold blue) \
+[$git_branch](yellow) \
+[$cmd_duration](dimmed green)\n\
+[$character](bold cyan) """
+
+[directory]
+style = "bold blue"
+truncation_length = 4
+truncate_to_repo = false
+
+[character]
+success_symbol = "[❯](bold cyan)"
+error_symbol = "[✗](bold red)"
+
+[cmd_duration]
+min_time = 500
+format = "[⏱ $duration]($style)"
+style = "dimmed green"
+
+[git_branch]
+format = "[$symbol$branch]($style) "
+symbol = ""
+style = "yellow"
+
+[git_status]
+disabled = true
+
+[hostname]
+disabled = true
+
+[username]
+disabled = true
+
+[time]
+disabled = false
+format = "[$time]($style) "
+style = "dimmed white"
+time_format = "%H:%M:%S"

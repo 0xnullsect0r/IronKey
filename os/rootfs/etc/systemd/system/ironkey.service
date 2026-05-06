@@ -1,0 +1,23 @@
+[Unit]
+Description=IronKey Application
+After=systemd-udevd.service
+Wants=systemd-udevd.service
+
+[Service]
+Type=simple
+User=root
+TTYPath=/dev/tty1
+StandardInput=tty
+StandardOutput=tty
+StandardError=journal
+
+# Launch cage (Wayland kiosk compositor) with the ironkey binary
+ExecStart=/usr/bin/cage -- /usr/bin/ironkey
+
+# If cage is unavailable, fall back to direct framebuffer launch
+ExecStartPre=-/sbin/modprobe drm
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

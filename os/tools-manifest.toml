@@ -1,0 +1,905 @@
+# IronKey Pre-installed Tools Manifest
+# This file defines every tool bundled on the USB image.
+#
+# Format per entry:
+#   [[tools]]
+#   name = "binary name"
+#   package = "source package / crate"
+#   category = "category"
+#   purpose = "short description"
+#   rust_native = true/false  # true = Rust-native tool
+#   static_link = true/false  # true = statically linked
+#   version = "pinned version"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Shells
+# ──────────────────────────────────────────────────────────────────────────────
+
+[[tools]]
+name = "zsh"
+package = "zsh"
+category = "shell"
+purpose = "Default interactive shell"
+rust_native = false
+static_link = false
+
+[[tools]]
+name = "bash"
+package = "bash"
+category = "shell"
+purpose = "POSIX fallback shell"
+rust_native = false
+static_link = false
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Rust-Native CLI Replacements
+# ──────────────────────────────────────────────────────────────────────────────
+
+[[tools]]
+name = "eza"
+package = "eza"
+category = "rust-native"
+purpose = "ls replacement with icons and colors"
+replaces = "ls"
+rust_native = true
+static_link = true
+
+[[tools]]
+name = "bat"
+package = "bat"
+category = "rust-native"
+purpose = "cat with syntax highlighting"
+replaces = "cat"
+rust_native = true
+static_link = true
+
+[[tools]]
+name = "fd"
+package = "fd-find"
+category = "rust-native"
+purpose = "Fast file search"
+replaces = "find"
+rust_native = true
+static_link = true
+
+[[tools]]
+name = "rg"
+package = "ripgrep"
+category = "rust-native"
+purpose = "Fast content search"
+replaces = "grep"
+rust_native = true
+static_link = true
+
+[[tools]]
+name = "dust"
+package = "du-dust"
+category = "rust-native"
+purpose = "Disk usage visualizer"
+replaces = "du"
+rust_native = true
+static_link = true
+
+[[tools]]
+name = "hexyl"
+package = "hexyl"
+category = "rust-native"
+purpose = "Hex viewer"
+replaces = "hexdump"
+rust_native = true
+static_link = true
+
+[[tools]]
+name = "sd"
+package = "sd"
+category = "rust-native"
+purpose = "Stream editor"
+replaces = "sed"
+rust_native = true
+static_link = true
+
+[[tools]]
+name = "procs"
+package = "procs"
+category = "rust-native"
+purpose = "Process viewer"
+replaces = "ps"
+rust_native = true
+static_link = true
+
+[[tools]]
+name = "btm"
+package = "bottom"
+category = "rust-native"
+purpose = "System resource monitor"
+replaces = "top"
+rust_native = true
+static_link = true
+
+[[tools]]
+name = "xcp"
+package = "xcp"
+category = "rust-native"
+purpose = "Fast copy with progress"
+replaces = "cp"
+rust_native = true
+static_link = true
+
+[[tools]]
+name = "ouch"
+package = "ouch"
+category = "rust-native"
+purpose = "Compress/decompress any archive format"
+replaces = "tar,zip,gzip,xz"
+rust_native = true
+static_link = true
+
+[[tools]]
+name = "starship"
+package = "starship"
+category = "rust-native"
+purpose = "Cross-shell prompt (used with zsh)"
+rust_native = true
+static_link = true
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Partition Table Editors
+# ──────────────────────────────────────────────────────────────────────────────
+
+[[tools]]
+name = "fdisk"
+package = "util-linux"
+category = "partition-editors"
+purpose = "Classic MBR/GPT partition editor (interactive + scriptable)"
+rust_native = false
+static_link = false
+
+[[tools]]
+name = "gdisk"
+package = "gdisk"
+category = "partition-editors"
+purpose = "GPT-only partition editor, more robust than fdisk for GPT"
+rust_native = false
+static_link = false
+
+[[tools]]
+name = "cgdisk"
+package = "gdisk"
+category = "partition-editors"
+purpose = "Curses-based GPT partition editor"
+rust_native = false
+static_link = false
+
+[[tools]]
+name = "sgdisk"
+package = "gdisk"
+category = "partition-editors"
+purpose = "Scripted/non-interactive gdisk — ideal for automation"
+rust_native = false
+static_link = false
+
+[[tools]]
+name = "parted"
+package = "parted"
+category = "partition-editors"
+purpose = "GNU Parted — supports MBR + GPT, scriptable, widely supported"
+rust_native = false
+static_link = false
+
+[[tools]]
+name = "sfdisk"
+package = "util-linux"
+category = "partition-editors"
+purpose = "Script-friendly fdisk — JSON output, ideal for imaging/cloning"
+rust_native = false
+static_link = false
+
+[[tools]]
+name = "cfdisk"
+package = "util-linux"
+category = "partition-editors"
+purpose = "Curses-based fdisk with a simple visual interface"
+rust_native = false
+static_link = false
+
+[[tools]]
+name = "gparted"
+package = "gparted"
+category = "partition-editors"
+purpose = "GTK partition editor — launched via cage -d -- gparted"
+rust_native = false
+static_link = false
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Disk & Filesystem Management
+# ──────────────────────────────────────────────────────────────────────────────
+
+[[tools]]
+name = "mkfs.ext4"
+package = "e2fsprogs"
+category = "fs-management"
+purpose = "Create ext4 filesystems"
+rust_native = false
+
+[[tools]]
+name = "mkfs.ext3"
+package = "e2fsprogs"
+category = "fs-management"
+purpose = "Create ext3 filesystems"
+rust_native = false
+
+[[tools]]
+name = "mkfs.ext2"
+package = "e2fsprogs"
+category = "fs-management"
+purpose = "Create ext2 filesystems"
+rust_native = false
+
+[[tools]]
+name = "mkfs.fat"
+package = "dosfstools"
+category = "fs-management"
+purpose = "Create FAT12/16/32 filesystems"
+rust_native = false
+
+[[tools]]
+name = "mkfs.exfat"
+package = "exfatprogs"
+category = "fs-management"
+purpose = "Create exFAT filesystems"
+rust_native = false
+
+[[tools]]
+name = "mkfs.ntfs"
+package = "ntfs-3g"
+category = "fs-management"
+purpose = "Create NTFS filesystems"
+rust_native = false
+
+[[tools]]
+name = "mkfs.btrfs"
+package = "btrfs-progs"
+category = "fs-management"
+purpose = "Create btrfs filesystems"
+rust_native = false
+
+[[tools]]
+name = "mkfs.xfs"
+package = "xfsprogs"
+category = "fs-management"
+purpose = "Create XFS filesystems"
+rust_native = false
+
+[[tools]]
+name = "mkfs.f2fs"
+package = "f2fs-tools"
+category = "fs-management"
+purpose = "Create F2FS filesystems (flash-friendly, common on Chromebooks)"
+rust_native = false
+
+[[tools]]
+name = "mkswap"
+package = "util-linux"
+category = "fs-management"
+purpose = "Create swap partition/file"
+rust_native = false
+
+[[tools]]
+name = "mke2fs"
+package = "e2fsprogs"
+category = "fs-management"
+purpose = "Low-level ext filesystem creation"
+rust_native = false
+
+[[tools]]
+name = "tune2fs"
+package = "e2fsprogs"
+category = "fs-management"
+purpose = "Adjust ext2/3/4 filesystem parameters"
+rust_native = false
+
+[[tools]]
+name = "resize2fs"
+package = "e2fsprogs"
+category = "fs-management"
+purpose = "Resize ext2/3/4 filesystems online or offline"
+rust_native = false
+
+[[tools]]
+name = "e2fsck"
+package = "e2fsprogs"
+category = "fs-management"
+purpose = "ext2/3/4 filesystem check and repair"
+rust_native = false
+
+[[tools]]
+name = "fsck"
+package = "util-linux"
+category = "fs-management"
+purpose = "Generic filesystem checker"
+rust_native = false
+
+[[tools]]
+name = "fsck.fat"
+package = "dosfstools"
+category = "fs-management"
+purpose = "FAT filesystem check and repair"
+rust_native = false
+
+[[tools]]
+name = "fsck.exfat"
+package = "exfatprogs"
+category = "fs-management"
+purpose = "exFAT filesystem check and repair"
+rust_native = false
+
+[[tools]]
+name = "ntfsfix"
+package = "ntfs-3g"
+category = "fs-management"
+purpose = "NTFS quick fix (clear dirty bit, fix boot sector)"
+rust_native = false
+
+[[tools]]
+name = "ntfsresize"
+package = "ntfs-3g"
+category = "fs-management"
+purpose = "Resize NTFS filesystem"
+rust_native = false
+
+[[tools]]
+name = "btrfs"
+package = "btrfs-progs"
+category = "fs-management"
+purpose = "btrfs filesystem management CLI (check, scrub, balance, etc.)"
+rust_native = false
+
+[[tools]]
+name = "xfs_repair"
+package = "xfsprogs"
+category = "fs-management"
+purpose = "XFS filesystem repair"
+rust_native = false
+
+[[tools]]
+name = "xfs_info"
+package = "xfsprogs"
+category = "fs-management"
+purpose = "XFS filesystem information"
+rust_native = false
+
+[[tools]]
+name = "xfs_growfs"
+package = "xfsprogs"
+category = "fs-management"
+purpose = "Expand XFS filesystem"
+rust_native = false
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Disk Imaging & Cloning
+# ──────────────────────────────────────────────────────────────────────────────
+
+[[tools]]
+name = "dd"
+package = "coreutils"
+category = "disk-imaging"
+purpose = "Raw disk/partition clone and wipe"
+rust_native = false
+
+[[tools]]
+name = "ddrescue"
+package = "gddrescue"
+category = "disk-imaging"
+purpose = "GNU ddrescue — error-tolerant disk cloning, recovers failing drives"
+rust_native = false
+
+[[tools]]
+name = "dd_rescue"
+package = "dd_rescue"
+category = "disk-imaging"
+purpose = "Older dd_rescue — complementary to ddrescue"
+rust_native = false
+
+[[tools]]
+name = "dcfldd"
+package = "dcfldd"
+category = "disk-imaging"
+purpose = "dd with hashing, progress, and split output — forensics-grade"
+rust_native = false
+
+[[tools]]
+name = "partclone.ext4"
+package = "partclone"
+category = "disk-imaging"
+purpose = "Filesystem-aware partition cloning (ext4)"
+rust_native = false
+
+[[tools]]
+name = "partclone.ntfs"
+package = "partclone"
+category = "disk-imaging"
+purpose = "Filesystem-aware partition cloning (NTFS)"
+rust_native = false
+
+[[tools]]
+name = "partclone.fat"
+package = "partclone"
+category = "disk-imaging"
+purpose = "Filesystem-aware partition cloning (FAT)"
+rust_native = false
+
+[[tools]]
+name = "rsync"
+package = "rsync"
+category = "disk-imaging"
+purpose = "File-level sync and copy with delta compression"
+rust_native = false
+
+[[tools]]
+name = "pv"
+package = "pv"
+category = "disk-imaging"
+purpose = "Pipe viewer — adds progress bar and speed to any pipe"
+rust_native = false
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Disk Information & Diagnostics
+# ──────────────────────────────────────────────────────────────────────────────
+
+[[tools]]
+name = "lsblk"
+package = "util-linux"
+category = "disk-info"
+purpose = "List block devices in a tree with sizes, types, mount points"
+rust_native = false
+
+[[tools]]
+name = "blkid"
+package = "util-linux"
+category = "disk-info"
+purpose = "Show filesystem type, UUID, and label for all partitions"
+rust_native = false
+
+[[tools]]
+name = "lsscsi"
+package = "lsscsi"
+category = "disk-info"
+purpose = "List SCSI/SATA/USB storage devices"
+rust_native = false
+
+[[tools]]
+name = "lshw"
+package = "lshw"
+category = "disk-info"
+purpose = "Full hardware inventory (storage section very detailed)"
+rust_native = false
+
+[[tools]]
+name = "hwinfo"
+package = "hwinfo"
+category = "disk-info"
+purpose = "Detailed hardware probe including storage controllers"
+rust_native = false
+
+[[tools]]
+name = "smartctl"
+package = "smartmontools"
+category = "disk-info"
+purpose = "SMART disk health, temperature, error log, self-test"
+rust_native = false
+
+[[tools]]
+name = "nvme"
+package = "nvme-cli"
+category = "disk-info"
+purpose = "NVMe-specific CLI: identify, smart-log, error-log, sanitize"
+rust_native = false
+
+[[tools]]
+name = "hdparm"
+package = "hdparm"
+category = "disk-info"
+purpose = "ATA disk parameters, read speed test, power management"
+rust_native = false
+
+[[tools]]
+name = "sdparm"
+package = "sdparm"
+category = "disk-info"
+purpose = "SCSI/SAS disk parameters"
+rust_native = false
+
+[[tools]]
+name = "iostat"
+package = "sysstat"
+category = "disk-info"
+purpose = "I/O statistics per device"
+rust_native = false
+
+[[tools]]
+name = "iotop"
+package = "iotop"
+category = "disk-info"
+purpose = "Real-time per-process I/O monitor"
+rust_native = false
+
+[[tools]]
+name = "badblocks"
+package = "e2fsprogs"
+category = "disk-info"
+purpose = "Scan a disk for bad sectors"
+rust_native = false
+
+[[tools]]
+name = "wipefs"
+package = "util-linux"
+category = "disk-info"
+purpose = "Erase filesystem and partition table signatures"
+rust_native = false
+
+[[tools]]
+name = "disktype"
+package = "disktype"
+category = "disk-info"
+purpose = "Detect filesystem and partition type by magic bytes"
+rust_native = false
+
+[[tools]]
+name = "file"
+package = "file"
+category = "disk-info"
+purpose = "Identify any file or device by magic bytes"
+rust_native = false
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Encryption & Secure Access
+# ──────────────────────────────────────────────────────────────────────────────
+
+[[tools]]
+name = "cryptsetup"
+package = "cryptsetup"
+category = "encryption"
+purpose = "LUKS encryption: open, close, format, resize, reencrypt"
+rust_native = false
+
+[[tools]]
+name = "dislocker"
+package = "dislocker"
+category = "encryption"
+purpose = "Mount BitLocker-encrypted volumes"
+rust_native = false
+
+[[tools]]
+name = "veracrypt"
+package = "veracrypt"
+category = "encryption"
+purpose = "VeraCrypt / TrueCrypt volume access (CLI mode)"
+rust_native = false
+
+[[tools]]
+name = "hashdeep"
+package = "hashdeep"
+category = "encryption"
+purpose = "Recursive hashing and hash auditing (MD5, SHA1, SHA256, etc.)"
+rust_native = false
+
+[[tools]]
+name = "gpg"
+package = "gnupg2"
+category = "encryption"
+purpose = "GnuPG — decrypt/verify signed files found on host drives"
+rust_native = false
+
+[[tools]]
+name = "age"
+package = "age"
+category = "encryption"
+purpose = "Modern Rust-friendly file encryption tool"
+rust_native = true
+static_link = true
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Data Recovery & Forensics
+# ──────────────────────────────────────────────────────────────────────────────
+
+[[tools]]
+name = "testdisk"
+package = "testdisk"
+category = "forensics"
+purpose = "Recover lost partitions, fix partition tables, make disks bootable"
+rust_native = false
+
+[[tools]]
+name = "photorec"
+package = "testdisk"
+category = "forensics"
+purpose = "File carving — recover deleted files by type from raw disk"
+rust_native = false
+
+[[tools]]
+name = "extundelete"
+package = "extundelete"
+category = "forensics"
+purpose = "Recover deleted files from ext3/ext4 partitions"
+rust_native = false
+
+[[tools]]
+name = "ext4magic"
+package = "ext4magic"
+category = "forensics"
+purpose = "Recover deleted/overwritten files from ext3/ext4 journals"
+rust_native = false
+
+[[tools]]
+name = "ntfsundelete"
+package = "ntfs-3g"
+category = "forensics"
+purpose = "Recover recently deleted files from NTFS partitions"
+rust_native = false
+
+[[tools]]
+name = "foremost"
+package = "foremost"
+category = "forensics"
+purpose = "File carving by header/footer signatures"
+rust_native = false
+
+[[tools]]
+name = "scalpel"
+package = "scalpel"
+category = "forensics"
+purpose = "Fast file carver, foremost-derived, configurable signatures"
+rust_native = false
+
+[[tools]]
+name = "safecopy"
+package = "safecopy"
+category = "forensics"
+purpose = "Recover data from damaged media with configurable error handling"
+rust_native = false
+
+[[tools]]
+name = "dc3dd"
+package = "dc3dd"
+category = "forensics"
+purpose = "Forensic dd — hashing on the fly, split output, error log"
+rust_native = false
+
+[[tools]]
+name = "mmls"
+package = "sleuthkit"
+category = "forensics"
+purpose = "Sleuth Kit: display partition layout of a volume system"
+rust_native = false
+
+[[tools]]
+name = "fsstat"
+package = "sleuthkit"
+category = "forensics"
+purpose = "Sleuth Kit: filesystem statistics"
+rust_native = false
+
+[[tools]]
+name = "fls"
+package = "sleuthkit"
+category = "forensics"
+purpose = "Sleuth Kit: list files and directories"
+rust_native = false
+
+[[tools]]
+name = "icat"
+package = "sleuthkit"
+category = "forensics"
+purpose = "Sleuth Kit: output file content by inode"
+rust_native = false
+
+[[tools]]
+name = "blkcat"
+package = "sleuthkit"
+category = "forensics"
+purpose = "Sleuth Kit: output block content"
+rust_native = false
+
+[[tools]]
+name = "binwalk"
+package = "binwalk"
+category = "forensics"
+purpose = "Firmware/binary analysis, embedded filesystem extraction"
+rust_native = false
+
+[[tools]]
+name = "strings"
+package = "binutils"
+category = "forensics"
+purpose = "Extract printable strings from any binary or disk image"
+rust_native = false
+
+[[tools]]
+name = "hexedit"
+package = "hexedit"
+category = "forensics"
+purpose = "Interactive terminal hex editor for raw disk editing"
+rust_native = false
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Mounting & Filesystem Access
+# ──────────────────────────────────────────────────────────────────────────────
+
+[[tools]]
+name = "mount"
+package = "util-linux"
+category = "mounting"
+purpose = "Standard Linux mount"
+rust_native = false
+
+[[tools]]
+name = "umount"
+package = "util-linux"
+category = "mounting"
+purpose = "Standard Linux unmount"
+rust_native = false
+
+[[tools]]
+name = "apfs-fuse"
+package = "apfs-fuse"
+category = "mounting"
+purpose = "Mount APFS volumes from macOS drives (read-only)"
+rust_native = false
+
+[[tools]]
+name = "ntfs-3g"
+package = "ntfs-3g"
+category = "mounting"
+purpose = "Userspace NTFS driver (fallback if ntfs3 kernel module unavailable)"
+rust_native = false
+
+[[tools]]
+name = "zpool"
+package = "zfsutils-linux"
+category = "mounting"
+purpose = "OpenZFS pool management"
+rust_native = false
+
+[[tools]]
+name = "zfs"
+package = "zfsutils-linux"
+category = "mounting"
+purpose = "OpenZFS filesystem management"
+rust_native = false
+
+[[tools]]
+name = "bindfs"
+package = "bindfs"
+category = "mounting"
+purpose = "FUSE bind-mount with permission remapping"
+rust_native = false
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Bootloader & MBR Tools
+# ──────────────────────────────────────────────────────────────────────────────
+
+[[tools]]
+name = "grub-install"
+package = "grub2"
+category = "bootloader"
+purpose = "Install GRUB2 bootloader to a disk"
+rust_native = false
+
+[[tools]]
+name = "grub-mkconfig"
+package = "grub2"
+category = "bootloader"
+purpose = "Generate GRUB config (grub.cfg)"
+rust_native = false
+
+[[tools]]
+name = "efibootmgr"
+package = "efibootmgr"
+category = "bootloader"
+purpose = "Manage UEFI boot entries — add, remove, reorder"
+rust_native = false
+
+[[tools]]
+name = "syslinux"
+package = "syslinux"
+category = "bootloader"
+purpose = "Syslinux/Extlinux bootloader tools"
+rust_native = false
+
+# ──────────────────────────────────────────────────────────────────────────────
+# System & Process Utilities
+# ──────────────────────────────────────────────────────────────────────────────
+
+[[tools]]
+name = "htop"
+package = "htop"
+category = "system"
+purpose = "Interactive process viewer (ncurses)"
+rust_native = false
+
+[[tools]]
+name = "lsof"
+package = "lsof"
+category = "system"
+purpose = "List open files and the processes using them"
+rust_native = false
+
+[[tools]]
+name = "fuser"
+package = "psmisc"
+category = "system"
+purpose = "Identify processes using a file or mount point"
+rust_native = false
+
+[[tools]]
+name = "strace"
+package = "strace"
+category = "system"
+purpose = "Trace system calls — debug why a tool or mount is failing"
+rust_native = false
+
+[[tools]]
+name = "udevadm"
+package = "systemd"
+category = "system"
+purpose = "Query and monitor udev device events"
+rust_native = false
+
+[[tools]]
+name = "lspci"
+package = "pciutils"
+category = "system"
+purpose = "List PCI devices (storage controllers, GPU)"
+rust_native = false
+
+[[tools]]
+name = "lsusb"
+package = "usbutils"
+category = "system"
+purpose = "List USB devices"
+rust_native = false
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Text Processing
+# ──────────────────────────────────────────────────────────────────────────────
+
+[[tools]]
+name = "jq"
+package = "jq"
+category = "text-processing"
+purpose = "JSON processor (parses lsblk -J output, etc.)"
+rust_native = false
+static_link = true
+
+[[tools]]
+name = "awk"
+package = "gawk"
+category = "text-processing"
+purpose = "Pattern scanning and processing"
+rust_native = false
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Text Editors
+# ──────────────────────────────────────────────────────────────────────────────
+
+[[tools]]
+name = "nano"
+package = "nano"
+category = "editors"
+purpose = "Beginner-friendly terminal text editor"
+rust_native = false
+
+[[tools]]
+name = "vim"
+package = "vim"
+category = "editors"
+purpose = "Advanced terminal text editor"
+rust_native = false
+
+[[tools]]
+name = "micro"
+package = "micro"
+category = "editors"
+purpose = "Modern terminal editor with mouse support and clipboard"
+rust_native = false
+static_link = true

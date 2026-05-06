@@ -1,0 +1,8 @@
+/target
+**/*.rs.bk
+Cargo.lock
+*.iso
+*.img
+os/rootfs/squashfs-root/
+os/rootfs/initramfs.img
+os/rootfs/vmlinuz
