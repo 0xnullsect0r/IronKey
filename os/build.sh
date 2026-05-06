@@ -85,62 +85,48 @@ fi
 ok "Binary: $IRONKEY_BIN ($(du -sh "$IRONKEY_BIN" | cut -f1))"
 
 # ── Step 2: Bootstrap minimal Debian rootfs ──────────────────────────────────
+# Keep --include to the absolute minimum needed for debootstrap's second stage
+# to succeed. Complex packages (cage, Wayland libs, firmware) are installed
+# separately inside a full chroot in Step 3a, where /proc and /sys are mounted
+# and apt-get can properly run all post-install scripts.
 info "Bootstrapping minimal Debian rootfs (this may take a few minutes)…"
 debootstrap \
     --arch=amd64 \
     --variant=minbase \
     --components=main,non-free-firmware \
-    --include=systemd,dbus,dbus-user-session,cage,zsh,bash,udev,kmod,linux-image-amd64,initramfs-tools,live-boot,live-boot-initramfs-tools,live-config,firmware-realtek \
+    --include=systemd,systemd-sysv,dbus,bash,udev,kmod,linux-image-amd64,initramfs-tools,live-boot,live-boot-initramfs-tools,live-config \
     bookworm \
     "$ROOTFS_DIR" \
     http://deb.debian.org/debian
 
 ok "Debootstrap complete"
 
-# ── Step 3: Configure rootfs ─────────────────────────────────────────────────
-info "Configuring rootfs…"
+# ── Step 3: Copy in our files ────────────────────────────────────────────────
+info "Copying rootfs config files…"
 
-# Copy IronKey binary
 install -Dm755 "$IRONKEY_BIN" "$ROOTFS_DIR/usr/bin/ironkey"
 
-# Copy config files
 cp -r "$SCRIPT_DIR/rootfs/etc/." "$ROOTFS_DIR/etc/"
-chmod 644 "$ROOTFS_DIR/etc/zsh/zshrc"
-chmod 644 "$ROOTFS_DIR/etc/zsh/ironkey-aliases.zsh"
-chmod 644 "$ROOTFS_DIR/etc/starship.toml"
 chmod 644 "$ROOTFS_DIR/etc/live/boot.conf"
+# zsh config + starship may not exist yet; ignore failures from chmod on missing files
+chmod 644 "$ROOTFS_DIR/etc/zsh/zshrc"               2>/dev/null || true
+chmod 644 "$ROOTFS_DIR/etc/zsh/ironkey-aliases.zsh"  2>/dev/null || true
+chmod 644 "$ROOTFS_DIR/etc/starship.toml"             2>/dev/null || true
 
-# Enable IronKey service under graphical.target
-mkdir -p "$ROOTFS_DIR/etc/systemd/system/graphical.target.wants"
-ln -sf /etc/systemd/system/ironkey.service \
-    "$ROOTFS_DIR/etc/systemd/system/graphical.target.wants/ironkey.service"
-
-# Set default systemd target to graphical (so cage/IronKey starts)
-ln -sf /lib/systemd/system/graphical.target \
-    "$ROOTFS_DIR/etc/systemd/system/default.target"
-
-# Set hostname
 echo "ironkey" > "$ROOTFS_DIR/etc/hostname"
 
-# Minimal fstab — live-boot handles the root overlayfs.
-# Explicit tmpfs mounts on /tmp /var /run are intentionally omitted;
-# they race with live-boot's pivot-root and confuse early systemd startup.
+# Minimal fstab — live-boot manages root overlayfs; no extra tmpfs entries.
 cat > "$ROOTFS_DIR/etc/fstab" <<'EOF'
 proc    /proc   proc    defaults    0 0
 EOF
 
-ok "Rootfs configured"
+# Empty machine-id so systemd generates a transient one on each boot.
+> "$ROOTFS_DIR/etc/machine-id"
 
-# ── Step 3b: Prepare initramfs config for live-boot ──────────────────────────
-# These files must be in place BEFORE update-initramfs runs so the hooks pick
-# them up and bake them into the initrd image.
+# Temporary resolv.conf for chroot apt-get calls.
+echo "nameserver 1.1.1.1" > "$ROOTFS_DIR/etc/resolv.conf"
 
-# Explicitly include the modules live-boot needs inside the initramfs.
-# overlay:     overlayfs union mount for the writable live layer
-# squashfs:    read the filesystem.squashfs image
-# loop:        mount ISO images as block devices
-# usb_storage: USB mass-storage driver (required to read the live USB drive)
-# uas:         USB Attached SCSI (faster USB 3 protocol, common on modern hardware)
+# Initramfs-tools config (must exist before update-initramfs runs in Step 3c).
 mkdir -p "$ROOTFS_DIR/etc/initramfs-tools"
 cat > "$ROOTFS_DIR/etc/initramfs-tools/modules" <<'EOF'
 overlay
@@ -149,39 +135,26 @@ loop
 usb_storage
 uas
 EOF
+# gzip: universally supported; most: include all likely-needed drivers.
+grep -q '^COMPRESS=' "$ROOTFS_DIR/etc/initramfs-tools/initramfs.conf" 2>/dev/null \
+    && sed -i 's/^COMPRESS=.*/COMPRESS=gzip/' "$ROOTFS_DIR/etc/initramfs-tools/initramfs.conf" \
+    || echo "COMPRESS=gzip" >> "$ROOTFS_DIR/etc/initramfs-tools/initramfs.conf"
+grep -q '^MODULES=' "$ROOTFS_DIR/etc/initramfs-tools/initramfs.conf" 2>/dev/null \
+    && sed -i 's/^MODULES=.*/MODULES=most/' "$ROOTFS_DIR/etc/initramfs-tools/initramfs.conf" \
+    || echo "MODULES=most" >> "$ROOTFS_DIR/etc/initramfs-tools/initramfs.conf"
 
-# Use gzip for initramfs compression — universally supported by all kernels.
-# lz4/zstd may not be compiled in on older or minimal kernel configs.
-sed -i 's/^COMPRESS=.*/COMPRESS=gzip/' \
-    "$ROOTFS_DIR/etc/initramfs-tools/initramfs.conf" 2>/dev/null || \
-  echo "COMPRESS=gzip" >> "$ROOTFS_DIR/etc/initramfs-tools/initramfs.conf"
+ok "Config files copied"
 
-# MODULES=most ensures all likely-needed drivers (disk, USB, HID) are included.
-sed -i 's/^MODULES=.*/MODULES=most/' \
-    "$ROOTFS_DIR/etc/initramfs-tools/initramfs.conf" 2>/dev/null || \
-  echo "MODULES=most" >> "$ROOTFS_DIR/etc/initramfs-tools/initramfs.conf"
+# ── Step 3a: Full chroot package configuration ───────────────────────────────
+# debootstrap's second stage runs post-install scripts under a policy-rc.d that
+# blocks daemon starts, and WITHOUT a proper /proc or /sys. This means:
+#   • systemd's post-install may not fully complete
+#   • packages that need /proc during configuration are silently skipped
+# We now mount proc/sys/dev, run dpkg --configure -a to finish any partial
+# configurations, then apt-get install the UI + firmware packages that need
+# a working chroot environment.
+info "Configuring packages inside chroot…"
 
-# Empty machine-id: live systems should not ship a fixed ID.
-# systemd will generate a transient one on first boot automatically.
-> "$ROOTFS_DIR/etc/machine-id"
-
-# /run/user/0 is needed by cage (Wayland) at runtime; create it now so the
-# rootfs already has the directory, even though it will be remounted tmpfs.
-mkdir -p "$ROOTFS_DIR/run/user/0"
-chmod 700 "$ROOTFS_DIR/run/user/0"
-
-# Temporary resolv.conf so any chroot network calls (unlikely but safe) work
-echo "nameserver 1.1.1.1" > "$ROOTFS_DIR/etc/resolv.conf"
-
-# ── Step 3c: Regenerate initramfs inside chroot ───────────────────────────────
-# CRITICAL: debootstrap runs update-initramfs without /proc and /sys mounted.
-# This produces a degraded initramfs that does NOT include live-boot hooks,
-# which means live-boot's pivot-root never runs → PID 1 dies → kernel panic.
-#
-# We must regenerate the initramfs inside a proper chroot with all mounts.
-info "Regenerating initramfs with live-boot hooks (chroot)…"
-
-# Set up a cleanup trap so mounts are always removed even if we error out
 _chroot_cleanup() {
     for _mnt in dev/pts dev/shm dev sys proc; do
         mountpoint -q "$ROOTFS_DIR/$_mnt" 2>/dev/null && \
@@ -196,32 +169,60 @@ mount --bind   /dev     "$ROOTFS_DIR/dev"
 mount --bind   /dev/pts "$ROOTFS_DIR/dev/pts"
 mount -t tmpfs tmpfs    "$ROOTFS_DIR/dev/shm"
 
-# Ensure /sbin/init → systemd symlink exists (kernel needs a valid PID 1 path)
-chroot "$ROOTFS_DIR" ln -sfn /usr/lib/systemd/systemd /sbin/init 2>/dev/null || true
-chroot "$ROOTFS_DIR" ln -sfn /usr/lib/systemd/systemd /usr/sbin/init 2>/dev/null || true
+# Finish configuring any packages that debootstrap left in a partial state.
+chroot "$ROOTFS_DIR" env DEBIAN_FRONTEND=noninteractive dpkg --configure -a
 
-# Delete any initramfs generated by debootstrap's package scripts — it was built
-# without proper /proc & /sys so live-boot hooks may be absent or broken.
+# Install the remaining packages now that the chroot is fully functional.
+# cage: Wayland kiosk compositor (has many Wayland/DRM/libinput dependencies)
+# zsh + dbus-user-session + firmware-realtek: user shell, D-Bus session, NIC fw
+chroot "$ROOTFS_DIR" env DEBIAN_FRONTEND=noninteractive \
+    apt-get install -y --no-install-recommends \
+        cage \
+        zsh \
+        dbus-user-session \
+        firmware-realtek
+
+# ── Verify the systemd binary is actually present ─────────────────────────────
+# If it's missing the next stage will panic with "can't execute init".
+if [[ ! -f "$ROOTFS_DIR/usr/lib/systemd/systemd" ]]; then
+    _chroot_cleanup
+    err "/usr/lib/systemd/systemd not found in rootfs — debootstrap or dpkg --configure -a failed"
+fi
+ok "systemd binary confirmed: /usr/lib/systemd/systemd"
+
+# ── Step 3b: systemd target + service wiring ─────────────────────────────────
+# Set default target to graphical so cage/IronKey launches on boot.
+mkdir -p "$ROOTFS_DIR/etc/systemd/system/graphical.target.wants"
+ln -sf /etc/systemd/system/ironkey.service \
+    "$ROOTFS_DIR/etc/systemd/system/graphical.target.wants/ironkey.service"
+# Use /usr/lib path explicitly — bookworm uses usrmerge so /lib→usr/lib, but
+# symlink targets from outside the chroot should use the canonical path.
+ln -sf /usr/lib/systemd/system/graphical.target \
+    "$ROOTFS_DIR/etc/systemd/system/default.target"
+
+ok "Rootfs configured"
+
+# ── Step 3c: Regenerate initramfs inside chroot ───────────────────────────────
+# Now that all packages are installed and configured, rebuild the initramfs.
+# The debootstrap-generated initrd was built without /proc+/sys so live-boot
+# hooks were absent — delete it first so we get a guaranteed clean build.
+info "Regenerating initramfs with live-boot hooks…"
+
 rm -f "$ROOTFS_DIR"/boot/initrd.img-*
 
-# Regenerate from scratch. DEBIAN_FRONTEND=noninteractive prevents any prompts.
-# update-initramfs now runs with /proc and /sys available so all hooks execute.
 chroot "$ROOTFS_DIR" \
     env DEBIAN_FRONTEND=noninteractive \
     update-initramfs -c -k all
 
-# Verify the initrd was actually created
 INITRD_CHECK=$(ls "$ROOTFS_DIR"/boot/initrd.img-* 2>/dev/null | head -1)
 if [[ -z "$INITRD_CHECK" ]]; then
     _chroot_cleanup
-    err "update-initramfs did not produce an initrd — check the output above"
+    err "update-initramfs produced no initrd — check the output above"
 fi
-ok "Initramfs created: $(basename "$INITRD_CHECK") ($(du -sh "$INITRD_CHECK" | cut -f1))"
+ok "Initramfs: $(basename "$INITRD_CHECK") ($(du -sh "$INITRD_CHECK" | cut -f1))"
 
 _chroot_cleanup
 trap - EXIT
-
-ok "Initramfs regenerated with live-boot hooks"
 
 # ── Step 4: Pack rootfs into squashfs ────────────────────────────────────────
 info "Packing rootfs into squashfs…"
