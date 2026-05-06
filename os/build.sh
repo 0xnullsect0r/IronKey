@@ -55,7 +55,7 @@ ok "Binary: $IRONKEY_BIN ($(du -sh "$IRONKEY_BIN" | cut -f1))"
 info "Bootstrapping minimal Debian rootfs (this may take a few minutes)…"
 debootstrap \
     --variant=minbase \
-    --include=systemd,dbus,cage,zsh,bash,udev \
+    --include=systemd,dbus,cage,zsh,bash,udev,linux-image-amd64,initramfs-tools \
     bookworm \
     "$ROOTFS_DIR" \
     http://deb.debian.org/debian
