@@ -1,18 +1,22 @@
 #!/usr/bin/env bash
-# IronKey USB Flash Utility
+# IronKey — Build & Flash Utility
 #
-# Writes an IronKey .iso to a USB drive.
+# Builds IronKey from source and writes the ISO directly to a USB drive.
 #
 # Usage:
-#   sudo ./write-usb.sh --drive /dev/sdX [--iso ironkey.iso] [--yes]
+#   sudo ./write-usb.sh --drive /dev/sdX [options]
 #
 # Options:
-#   --drive <dev>   Target block device (required), e.g. /dev/sdb
-#   --iso   <file>  Path to the .iso file (default: latest ironkey-*.iso in CWD)
-#   --yes           Skip confirmation prompt (for scripting)
-#   --help          Show this help message
+#   --drive  <dev>    Target block device (required), e.g. /dev/sdb
+#   --skip-build      Skip the build step and use an existing ISO
+#   --iso    <file>   ISO to flash when --skip-build is used
+#                     (default: latest ironkey-*.iso in CWD)
+#   --yes             Skip the confirmation prompt
+#   --help            Show this help message
 
 set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # ── Colour helpers ────────────────────────────────────────────────────────────
 CYAN='\033[0;36m'
@@ -22,130 +26,183 @@ RED='\033[0;31m'
 BOLD='\033[1m'
 RESET='\033[0m'
 
-info()  { echo -e "${CYAN}▶ $*${RESET}"; }
-ok()    { echo -e "${GREEN}✔ $*${RESET}"; }
-warn()  { echo -e "${YELLOW}⚠ $*${RESET}"; }
-err()   { echo -e "${RED}✗ $*${RESET}" >&2; exit 1; }
-bold()  { echo -e "${BOLD}$*${RESET}"; }
+info()  { echo -e "${CYAN}▶  $*${RESET}"; }
+ok()    { echo -e "${GREEN}✔  $*${RESET}"; }
+warn()  { echo -e "${YELLOW}⚠  $*${RESET}"; }
+err()   { echo -e "${RED}✗  $*${RESET}" >&2; exit 1; }
+header(){ echo -e "\n${BOLD}$*${RESET}"; }
+rule()  { echo -e "${BOLD}$(printf '═%.0s' {1..60})${RESET}"; }
 
 # ── Usage ─────────────────────────────────────────────────────────────────────
 usage() {
   cat <<EOF
-${BOLD}IronKey USB Flash Utility${RESET}
+${BOLD}IronKey — Build & Flash Utility${RESET}
 
-  Writes an IronKey .iso to a USB drive.
+  Builds IronKey from source and writes it directly to a USB drive.
 
 ${BOLD}Usage:${RESET}
-  sudo ./write-usb.sh --drive /dev/sdX [--iso ironkey.iso] [--yes]
+  sudo ./write-usb.sh --drive /dev/sdX [options]
 
 ${BOLD}Options:${RESET}
-  --drive <dev>   Target block device (required), e.g. /dev/sdb
-  --iso   <file>  Path to the .iso file (default: latest ironkey-*.iso in CWD)
-  --yes           Skip confirmation prompt (for scripting)
-  --help          Show this help message
+  --drive  <dev>    Target block device (required), e.g. /dev/sdb
+  --skip-build      Skip the build step and flash an existing ISO
+  --iso    <file>   ISO to flash when using --skip-build
+                    (default: latest ironkey-*.iso in current directory)
+  --yes             Skip the confirmation prompt
+  --help            Show this help message
 
 ${BOLD}Examples:${RESET}
+  # Build from source and write to /dev/sdb
   sudo ./write-usb.sh --drive /dev/sdb
-  sudo ./write-usb.sh --drive /dev/sdb --iso ironkey-v0.1.0.iso
-  sudo ./write-usb.sh --drive /dev/sdb --yes   # no confirmation prompt
+
+  # Skip build, flash an existing ISO
+  sudo ./write-usb.sh --drive /dev/sdb --skip-build
+  sudo ./write-usb.sh --drive /dev/sdb --skip-build --iso ironkey-v1.0.0.iso
+
+  # Non-interactive (for scripting)
+  sudo ./write-usb.sh --drive /dev/sdb --yes
 EOF
 }
 
 # ── Parse arguments ───────────────────────────────────────────────────────────
 DRIVE=""
 ISO=""
+SKIP_BUILD=false
 YES=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --drive)
-      DRIVE="${2:-}"
-      [[ -z "$DRIVE" ]] && err "--drive requires a device path argument"
-      shift 2
-      ;;
+      DRIVE="${2:-}"; [[ -z "$DRIVE" ]] && err "--drive requires a device path"
+      shift 2 ;;
     --iso)
-      ISO="${2:-}"
-      [[ -z "$ISO" ]] && err "--iso requires a file path argument"
-      shift 2
-      ;;
+      ISO="${2:-}"; [[ -z "$ISO" ]] && err "--iso requires a file path"
+      shift 2 ;;
+    --skip-build)
+      SKIP_BUILD=true; shift ;;
     --yes|-y)
-      YES=true
-      shift
-      ;;
+      YES=true; shift ;;
     --help|-h)
-      usage
-      exit 0
-      ;;
+      usage; exit 0 ;;
     *)
-      err "Unknown option: $1  (run with --help for usage)"
-      ;;
+      err "Unknown option: $1  (use --help for usage)" ;;
   esac
 done
 
 # ── Root check ────────────────────────────────────────────────────────────────
-[[ $EUID -eq 0 ]] || err "This script must be run as root.  Try: sudo ./write-usb.sh $*"
+[[ $EUID -eq 0 ]] || err "Must be run as root.  Try: sudo $0 $*"
 
 # ── Validate --drive ──────────────────────────────────────────────────────────
-[[ -z "$DRIVE" ]] && err "--drive is required.  Run with --help for usage."
-
+[[ -z "$DRIVE" ]] && err "--drive is required.  Use --help for usage."
 [[ -e "$DRIVE" ]] || err "Device not found: $DRIVE"
-
 [[ -b "$DRIVE" ]] || err "$DRIVE is not a block device."
 
-# Reject partition paths like /dev/sda1 — we want the whole disk
+# Reject partition paths like /dev/sda1
 if [[ "$DRIVE" =~ [0-9]$ ]]; then
-  PARENT="${DRIVE%%[0-9]*}"
-  err "$DRIVE looks like a partition. Did you mean ${PARENT}?  Supply the whole disk, not a partition."
+  err "$DRIVE looks like a partition. Supply the whole disk (e.g. ${DRIVE%%[0-9]*})."
 fi
 
-# ── Resolve --iso ─────────────────────────────────────────────────────────────
-if [[ -z "$ISO" ]]; then
-  # Auto-detect: pick the newest ironkey-*.iso in CWD
-  ISO=$(ls -t ironkey-*.iso 2>/dev/null | head -1 || true)
+# ── Banner ────────────────────────────────────────────────────────────────────
+echo ""
+rule
+echo -e "${BOLD}  ⚿  IronKey — Build & Flash Utility${RESET}"
+rule
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PHASE 1 — BUILD
+# ══════════════════════════════════════════════════════════════════════════════
+if [[ "$SKIP_BUILD" == false ]]; then
+  header "Phase 1/2 — Building IronKey ISO"
+  echo ""
+
+  # Derive a versioned ISO name from git describe, fall back to timestamp
+  VERSION=$(git -C "$SCRIPT_DIR" describe --tags --always 2>/dev/null || date +%Y%m%d)
+  ISO="${SCRIPT_DIR}/ironkey-${VERSION}.iso"
+
+  info "Version : $VERSION"
+  info "Output  : $ISO"
+  info "Build script: os/build.sh"
+  echo ""
+
+  # Check system build deps
+  for dep in debootstrap mksquashfs grub-mkrescue; do
+    command -v "$dep" >/dev/null || err \
+      "$dep not found. Install build deps first:
+  sudo apt-get install -y debootstrap squashfs-tools grub-pc-bin grub-efi-amd64-bin xorriso mtools"
+  done
+
+  # Check Rust / build the binary as the invoking user then hand it off
+  REAL_USER="${SUDO_USER:-$(whoami)}"
+  REAL_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
+  CARGO_BIN="${REAL_HOME}/.cargo/bin/cargo"
+  [[ -x "$CARGO_BIN" ]] || command -v cargo &>/dev/null || \
+    err "Rust/cargo not found. Install via: curl https://sh.rustup.rs -sSf | sh"
+
+  CARGO="${CARGO_BIN}"
+  command -v cargo &>/dev/null && CARGO="cargo"
+
+  info "Compiling IronKey binary (this may take a few minutes)…"
+  sudo -u "$REAL_USER" "$CARGO" build \
+    --manifest-path "$SCRIPT_DIR/Cargo.toml" \
+    -p ironkey-app \
+    --release
+
+  PREBUILT="$SCRIPT_DIR/target/release/ironkey"
+  [[ -f "$PREBUILT" ]] || err "Binary not found at $PREBUILT — cargo build may have failed."
+  ok "Binary compiled: $(du -sh "$PREBUILT" | cut -f1)"
+
+  info "Running os/build.sh…"
+  IRONKEY_PREBUILT="$PREBUILT" bash "$SCRIPT_DIR/os/build.sh" "$ISO"
+
+  [[ -f "$ISO" ]] || err "os/build.sh completed but ISO not found at $ISO"
+  ok "ISO built: $ISO ($(du -sh "$ISO" | cut -f1))"
+
+else
+  # ── --skip-build: resolve an existing ISO ───────────────────────────────────
+  header "Phase 1/2 — Skipping build (--skip-build)"
+  echo ""
+
   if [[ -z "$ISO" ]]; then
-    ISO=$(ls -t *.iso 2>/dev/null | head -1 || true)
+    ISO=$(ls -t "$SCRIPT_DIR"/ironkey-*.iso 2>/dev/null | head -1 || true)
+    [[ -z "$ISO" ]] && ISO=$(ls -t "$SCRIPT_DIR"/*.iso 2>/dev/null | head -1 || true)
+    [[ -z "$ISO" ]] && err "No .iso found. Build first or use --iso <file>."
+    info "Auto-detected ISO: $ISO"
   fi
-  [[ -z "$ISO" ]] && err "No .iso file found in the current directory. Use --iso to specify one."
-  info "Auto-detected ISO: $ISO"
+
+  [[ -f "$ISO" ]] || err "ISO not found: $ISO"
+  ok "Using ISO: $ISO ($(du -sh "$ISO" | cut -f1))"
 fi
 
-[[ -f "$ISO" ]] || err "ISO file not found: $ISO"
+# ══════════════════════════════════════════════════════════════════════════════
+# PHASE 2 — FLASH
+# ══════════════════════════════════════════════════════════════════════════════
+header "Phase 2/2 — Flashing to USB"
+echo ""
 
 ISO_SIZE=$(du -sh "$ISO" | cut -f1)
+info "ISO   : $ISO ($ISO_SIZE)"
+info "Drive : $DRIVE"
+echo ""
 
-# ── Show drive info ───────────────────────────────────────────────────────────
-echo ""
-bold "═══════════════════════════════════════════════════════════"
-bold "  IronKey USB Flash Utility"
-bold "═══════════════════════════════════════════════════════════"
-echo ""
-info "ISO:   $ISO ($ISO_SIZE)"
-info "Drive: $DRIVE"
-echo ""
 echo "Drive information:"
 echo ""
 lsblk -o NAME,SIZE,TYPE,VENDOR,MODEL,MOUNTPOINT "$DRIVE" 2>/dev/null || lsblk "$DRIVE" 2>/dev/null || true
 echo ""
 
-# ── Warn and confirm ──────────────────────────────────────────────────────────
 warn "ALL DATA ON ${DRIVE} WILL BE PERMANENTLY ERASED."
 echo ""
 
+# ── Confirmation ──────────────────────────────────────────────────────────────
 if [[ "$YES" == false ]]; then
   DRIVE_SHORT="${DRIVE##*/}"
   echo -e "${YELLOW}To confirm, type the drive name ${BOLD}${DRIVE_SHORT}${RESET}${YELLOW} and press Enter:${RESET}"
   read -r CONFIRM
-
-  if [[ "$CONFIRM" != "$DRIVE_SHORT" ]]; then
-    echo ""
-    err "Confirmation did not match. Aborting."
-  fi
+  [[ "$CONFIRM" == "$DRIVE_SHORT" ]] || err "Confirmation did not match. Aborting."
   echo ""
 fi
 
 # ── Unmount all partitions ────────────────────────────────────────────────────
 info "Unmounting any mounted partitions on ${DRIVE}…"
-# Find all partitions of this disk that are currently mounted
 while IFS= read -r PART; do
   if mount | grep -q "^${PART} "; then
     info "  Unmounting ${PART}…"
@@ -153,7 +210,7 @@ while IFS= read -r PART; do
   fi
 done < <(lsblk -lno NAME "$DRIVE" | awk "NR>1{print \"/dev/\" \$1}")
 
-# ── Write the ISO ─────────────────────────────────────────────────────────────
+# ── Write ─────────────────────────────────────────────────────────────────────
 echo ""
 info "Writing $ISO to $DRIVE…"
 echo ""
@@ -166,12 +223,15 @@ dd \
   conv=fsync
 
 echo ""
-info "Running sync…"
+info "Syncing…"
 sync
 
+# ── Done ──────────────────────────────────────────────────────────────────────
 echo ""
-ok "Done! $ISO has been written to $DRIVE."
+rule
+ok "IronKey has been written to $DRIVE."
+rule
 echo ""
-echo -e "  ${CYAN}Remove the drive safely and boot your target machine from it.${RESET}"
-echo -e "  ${CYAN}Set USB as first boot device in BIOS/UEFI, disable Secure Boot.${RESET}"
+echo -e "  ${CYAN}Remove the drive safely, then boot your target machine from it.${RESET}"
+echo -e "  ${CYAN}In BIOS/UEFI: set USB as first boot device and disable Secure Boot.${RESET}"
 echo ""
