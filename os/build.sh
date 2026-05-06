@@ -31,17 +31,25 @@ err()   { echo -e "${RED}✗ $*${RESET}" >&2; exit 1; }
 command -v debootstrap  >/dev/null || err "debootstrap not found (apt install debootstrap)"
 command -v mksquashfs   >/dev/null || err "mksquashfs not found (apt install squashfs-tools)"
 command -v grub-mkrescue>/dev/null || err "grub-mkrescue not found (apt install grub-pc-bin grub-efi-amd64-bin)"
-command -v cargo        >/dev/null || err "cargo not found (install Rust via rustup)"
+if [[ -z "${IRONKEY_PREBUILT:-}" ]]; then
+    command -v cargo >/dev/null || err "cargo not found (install Rust via rustup)"
+fi
 
 mkdir -p "$BUILD_DIR" "$ROOTFS_DIR" "$ISO_DIR"
 
 # ── Step 1: Build IronKey binary ─────────────────────────────────────────────
 info "Building IronKey application binary…"
 cd "$REPO_ROOT"
-cargo build -p ironkey-app --release
-IRONKEY_BIN="$REPO_ROOT/target/release/ironkey"
+if [[ -n "${IRONKEY_PREBUILT:-}" ]]; then
+    # CI: binary was compiled as the non-root runner user and passed in via env.
+    IRONKEY_BIN="$IRONKEY_PREBUILT"
+    ok "Using pre-built binary: $IRONKEY_BIN"
+else
+    cargo build -p ironkey-app --release
+    IRONKEY_BIN="$REPO_ROOT/target/release/ironkey"
+fi
 [[ -f "$IRONKEY_BIN" ]] || err "Build failed: binary not found at $IRONKEY_BIN"
-ok "Binary built: $IRONKEY_BIN ($(du -sh "$IRONKEY_BIN" | cut -f1))"
+ok "Binary: $IRONKEY_BIN ($(du -sh "$IRONKEY_BIN" | cut -f1))"
 
 # ── Step 2: Bootstrap minimal Debian rootfs ──────────────────────────────────
 info "Bootstrapping minimal Debian rootfs (this may take a few minutes)…"

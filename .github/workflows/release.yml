@@ -48,10 +48,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-build-
 
+      - name: Build IronKey binary
+        run: cargo build -p ironkey-app --release
+
       - name: Build IronKey ISO
         run: |
           ISO_NAME="ironkey-${{ github.ref_name }}.iso"
-          sudo bash os/build.sh "$ISO_NAME"
+          # Pass the pre-built binary path so build.sh skips the cargo step.
+          # Also preserve PATH so any tools installed in ~/.cargo/bin are reachable.
+          sudo env PATH="$PATH" IRONKEY_PREBUILT="$(pwd)/target/release/ironkey" \
+            bash os/build.sh "$ISO_NAME"
           echo "ISO_NAME=$ISO_NAME" >> "$GITHUB_ENV"
 
       - name: Compute SHA-256 checksum
