@@ -89,7 +89,8 @@ info "Bootstrapping minimal Debian rootfs (this may take a few minutes)…"
 debootstrap \
     --arch=amd64 \
     --variant=minbase \
-    --include=systemd,dbus,dbus-user-session,cage,zsh,bash,udev,kmod,linux-image-amd64,initramfs-tools,live-boot,live-boot-initramfs-tools,live-config \
+    --components=main,non-free-firmware \
+    --include=systemd,dbus,dbus-user-session,cage,zsh,bash,udev,kmod,linux-image-amd64,initramfs-tools,live-boot,live-boot-initramfs-tools,live-config,firmware-realtek \
     bookworm \
     "$ROOTFS_DIR" \
     http://deb.debian.org/debian
@@ -135,14 +136,18 @@ ok "Rootfs configured"
 # them up and bake them into the initrd image.
 
 # Explicitly include the modules live-boot needs inside the initramfs.
-# overlay:   overlayfs union mount for the writable live layer
-# squashfs:  read the filesystem.squashfs image
-# loop:      mount ISO images as block devices
+# overlay:     overlayfs union mount for the writable live layer
+# squashfs:    read the filesystem.squashfs image
+# loop:        mount ISO images as block devices
+# usb_storage: USB mass-storage driver (required to read the live USB drive)
+# uas:         USB Attached SCSI (faster USB 3 protocol, common on modern hardware)
 mkdir -p "$ROOTFS_DIR/etc/initramfs-tools"
 cat > "$ROOTFS_DIR/etc/initramfs-tools/modules" <<'EOF'
 overlay
 squashfs
 loop
+usb_storage
+uas
 EOF
 
 # Use gzip for initramfs compression — universally supported by all kernels.
