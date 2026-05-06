@@ -231,21 +231,24 @@ if [[ "$QEMU" == true ]]; then
   REAL_DISPLAY=$(su -s /bin/sh "$REAL_USER" -c 'echo $DISPLAY' 2>/dev/null || echo ":0")
   REAL_XAUTH=$(su -s /bin/sh "$REAL_USER" -c 'echo $XAUTHORITY' 2>/dev/null || echo "")
 
-  # -serial stdio: kernel console (console=tty0 + serial) output appears here
-  # -vga virtio:   modern virtio GPU for Wayland/DRM
-  # -usb -device usb-tablet: proper pointer so mouse doesn't get grabbed
+  # -serial stdio:       kernel console output (console=tty0) appears in this terminal
+  # -machine q35:        modern chipset; better PCIe / IOMMU compatibility
+  # -device virtio-gpu:  DRM-capable GPU so cage/Wayland can open a KMS device
+  # -usb + usb-tablet:   relative pointer tracking so mouse isn't grabbed
   env DISPLAY="$REAL_DISPLAY" XAUTHORITY="$REAL_XAUTH" \
     sudo -u "$REAL_USER" \
     qemu-system-x86_64 \
       $KVM_FLAG \
       $BIOS_FLAG \
+      -machine type=q35 \
       -m 2G \
       -smp 2 \
       -cdrom "$ISO" \
       -boot d \
-      -vga virtio \
+      -device virtio-gpu \
       -serial stdio \
-      -usb -device usb-tablet
+      -usb -device usb-tablet \
+      -no-reboot
 
   exit 0
 fi

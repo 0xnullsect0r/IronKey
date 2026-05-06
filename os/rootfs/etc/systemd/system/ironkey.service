@@ -1,32 +1,39 @@
 [Unit]
 Description=IronKey Application
-# Wait for udev to settle (DRM devices, input devices) and networking
-After=systemd-udevd-settle.service multi-user.target
+# graphical.target pulls in display-manager.service; since we ARE the display
+# manager we must be ordered AFTER multi-user.target is reached and udev has
+# settled so DRM/input devices are all enumerated.
+After=multi-user.target systemd-udevd-settle.service
 Wants=systemd-udevd-settle.service
 
 [Service]
 Type=simple
 User=root
+PAMName=login
 TTYPath=/dev/tty1
 StandardInput=tty
-StandardOutput=tty
+StandardOutput=journal
 StandardError=journal
 
-# XDG_RUNTIME_DIR is required by Wayland/cage
+# Wayland/cage requirements
 Environment=XDG_RUNTIME_DIR=/run/user/0
 Environment=RUST_LOG=info
+# Needed for DRM/KMS detection by wlroots (cage's compositor library)
+Environment=WLR_LIBINPUT_NO_DEVICES=1
+Environment=WLR_RENDERER_ALLOW_SOFTWARE=1
 
-# Launch cage (Wayland kiosk compositor) with the IronKey binary.
-# --seat=seat0 ensures cage uses the primary seat from udev.
-ExecStart=/usr/bin/cage -s -- /usr/bin/ironkey
-
-# If cage is unavailable, fall back to direct framebuffer launch
-ExecStartPre=-/sbin/modprobe drm
+# Ensure runtime dir exists and DRM module is loaded before cage starts
 ExecStartPre=/bin/mkdir -p /run/user/0
 ExecStartPre=/bin/chmod 700 /run/user/0
+ExecStartPre=-/sbin/modprobe drm
+ExecStartPre=-/sbin/modprobe drm_kms_helper
+
+# Launch cage (Wayland kiosk compositor) with the IronKey binary.
+# -s: allow VT-switching so the user can reach a shell on tty2 if needed.
+ExecStart=/usr/bin/cage -s -- /usr/bin/ironkey
 
 Restart=on-failure
-RestartSec=3
+RestartSec=5
 
 [Install]
 WantedBy=graphical.target
