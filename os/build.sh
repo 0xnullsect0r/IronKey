@@ -101,6 +101,24 @@ debootstrap \
 
 ok "Debootstrap complete"
 
+# ── Force dpkg non-interactive mode in chroot (must happen before ANY dpkg) ──
+# /etc/zsh/zshrc is a conffile owned by zsh-common. If it already exists on
+# disk when zsh-common is configured, dpkg asks an interactive question. Since
+# Docker has no stdin TTY, dpkg reads EOF and aborts. We prevent this globally
+# by writing a dpkg config file that forces non-interactive behaviour for ALL
+# dpkg invocations inside this chroot — dpkg --configure -a, apt-get install,
+# and any maintainer script that calls dpkg internally.
+mkdir -p "$ROOTFS_DIR/etc/dpkg/dpkg.cfg.d"
+cat > "$ROOTFS_DIR/etc/dpkg/dpkg.cfg.d/99-noninteractive" <<'EOF'
+force-confold
+force-confdef
+EOF
+# Also tell apt not to allocate a PTY for dpkg (suppresses more interactive prompts).
+mkdir -p "$ROOTFS_DIR/etc/apt/apt.conf.d"
+cat > "$ROOTFS_DIR/etc/apt/apt.conf.d/99-noninteractive" <<'EOF'
+Dpkg::Use-Pty "false";
+EOF
+
 # ── Step 3: Pre-chroot config ────────────────────────────────────────────────
 # Write files that must exist BEFORE the chroot apt-get runs.
 # IMPORTANT: Do NOT copy /etc/zsh/* or any other file that dpkg owns as a
@@ -168,7 +186,10 @@ mount --bind   /dev/pts "$ROOTFS_DIR/dev/pts"
 mount -t tmpfs tmpfs    "$ROOTFS_DIR/dev/shm"
 
 # Finish configuring any packages that debootstrap left in a partial state.
-chroot "$ROOTFS_DIR" env DEBIAN_FRONTEND=noninteractive dpkg --configure -a
+# --force-confold/--force-confdef: belt-and-suspenders even though
+# /etc/dpkg/dpkg.cfg.d/99-noninteractive already sets these globally.
+chroot "$ROOTFS_DIR" env DEBIAN_FRONTEND=noninteractive \
+    dpkg --force-confold --force-confdef --configure -a
 
 # Install the remaining packages now that the chroot is fully functional.
 # cage: Wayland kiosk compositor (has many Wayland/DRM/libinput dependencies)
@@ -192,7 +213,7 @@ chroot "$ROOTFS_DIR" env DEBIAN_FRONTEND=noninteractive \
 info "Copying rootfs config files…"
 cp -r "$SCRIPT_DIR/rootfs/etc/." "$ROOTFS_DIR/etc/"
 chmod 644 "$ROOTFS_DIR/etc/live/boot.conf"
-chmod 644 "$ROOTFS_DIR/etc/zsh/zshrc"               2>/dev/null || true
+chmod 644 "$ROOTFS_DIR/etc/zsh/zshrc.local"            2>/dev/null || true
 chmod 644 "$ROOTFS_DIR/etc/zsh/ironkey-aliases.zsh"  2>/dev/null || true
 chmod 644 "$ROOTFS_DIR/etc/starship.toml"             2>/dev/null || true
 ok "Config files copied"
